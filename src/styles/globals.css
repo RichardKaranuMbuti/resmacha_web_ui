@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FCFAFF;
+  --foreground: #171717;
+  
+  /* Main theme lavender colors */
+  --lavender-50: #f5f3ff;
+  --lavender-100: #ede9fe;
+  --lavender-200: #ddd6fe;
+  --lavender-300: #c4b5fd;
+  --lavender-400: #a78bfa;
+  --lavender-500: #8b5cf6;
+  --lavender-600: #7c3aed;
+  --lavender-700: #6d28d9;
+  --lavender-800: #5b21b6;
+  --lavender-900: #4c1d95;
+  
+  /* Button theme - plum */
+  --plum: #DDA0DD;
+  --plum-light: #E6BBE6;
+  --plum-dark: #C17FC1;
+  
+  /* Text colors */
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --text-light: #FAFAFA;
+  
+  /* Border colors */
+  --border: #D4D4D8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    
+    /* Adjust dark mode lavender theme */
+    --lavender-500: #a78bfa;
+    --lavender-600: #8b5cf6;
+    
+    /* Adjust dark mode plum */
+    --plum: #C17FC1;
+    
+    /* Dark mode text and borders */
+    --text-primary: #FAFAFA;
+    --text-secondary: #A3A3A3;
+    --border: #3F3F46;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Utility classes */
+.text-lavender {
+  color: var(--lavender-500);
+}
+
+.bg-lavender {
+  background-color: var(--lavender-100);
+}
+
+.btn-plum {
+  background-color: var(--plum);
+  color: var(--text-primary);
+}

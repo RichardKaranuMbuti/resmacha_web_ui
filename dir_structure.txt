@@ -1,0 +1,31 @@
+resmacha-web-ui/
+├── public/                  # Static assets (images, fonts, etc.)
+│   └── images/
+├── src/                     # Source files (recommended for larger projects)
+│   ├── app/                 # App Router Directory
+│   │   ├── (auth)/          # Authentication-related routes (protected routes)
+│   │   │   └── login/       # Login page
+│   │   │   └── signup/      # Signup page
+│   │   ├── dashboard/       # Main dashboard for authenticated users
+│   │   ├── settings/        # User settings pages
+│   │   ├── layout.tsx       # Main layout for app router
+│   │   └── page.tsx         # Main entry page (Home page)
+│   ├── components/          # Reusable components
+│   │   └── ui/              # UI Components (Button, Modal, etc.)
+│   │   └── navbar.tsx       # Navbar Component
+│   │   └── footer.tsx       # Footer Component
+│   ├── context/             # Context providers (User, Theme, etc.)
+│   ├── hooks/               # Custom hooks
+│   ├── lib/                 # Library code (API, utilities, helpers)
+│   │   └── axiosConfig.ts   # Axios instance configuration
+│   ├── services/            # Service functions (API calls)
+│   │   └── authService.ts   # Authentication services
+│   └── styles/              # Global styles (CSS or Tailwind CSS)
+│   │   └── globals.css
+│   └── types/               # TypeScript types
+│   │   └── user.d.ts        # User-related types
+├── .gitignore
+├── next.config.js           # Next.js configuration
+├── package.json
+├── tsconfig.json            # TypeScript configuration
+└── README.md
