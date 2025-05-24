@@ -1,39 +1,36 @@
 // src/components/ui/Modal.tsx
 import { cva, type VariantProps } from 'class-variance-authority';
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Button } from './Button';
 
-// Note: In a real project, you would use a library like @headlessui/react
-// This is a simplified version for demonstration purposes
-
-const modalOverlayVariants = cva(
-  'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4',
+const overlayVariants = cva(
+  'fixed inset-0 z-50 flex items-center justify-center p-4 transition-colors',
   {
     variants: {
-      center: {
-        true: 'items-center',
-        false: 'items-start pt-16',
+      variant: {
+        default: 'bg-black/50 backdrop-blur-sm',
+        dark: 'bg-black/70',
+        light: 'bg-white/80 backdrop-blur-sm',
       },
     },
     defaultVariants: {
-      center: true,
+      variant: 'default',
     },
   }
 );
 
-const modalContentVariants = cva(
-  'bg-background rounded-lg shadow-xl relative overflow-hidden max-h-[90vh] flex flex-col',
+const modalVariants = cva(
+  'relative w-full max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl transition-all',
   {
     variants: {
       size: {
-        sm: 'max-w-sm w-full',
-        md: 'max-w-md w-full',
-        lg: 'max-w-lg w-full',
-        xl: 'max-w-xl w-full',
-        '2xl': 'max-w-2xl w-full',
-        full: 'max-w-full w-full',
-      },
-      fullHeight: {
-        true: 'h-[90vh]',
+        sm: 'max-w-sm',
+        md: 'max-w-md',
+        lg: 'max-w-lg',
+        xl: 'max-w-xl',
+        '2xl': 'max-w-2xl',
+        '3xl': 'max-w-3xl',
+        full: 'max-w-full m-4',
       },
     },
     defaultVariants: {
@@ -44,13 +41,16 @@ const modalContentVariants = cva(
 
 export interface ModalProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof modalContentVariants> {
+    VariantProps<typeof overlayVariants>,
+    VariantProps<typeof modalVariants> {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
   description?: string;
-  center?: boolean;
+  showCloseButton?: boolean;
   closeOnOverlayClick?: boolean;
+  closeOnEscape?: boolean;
+  children: React.ReactNode;
 }
 
 const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
@@ -59,82 +59,182 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
     onClose,
     title,
     description,
+    showCloseButton = true,
+    closeOnOverlayClick = true,
+    closeOnEscape = true,
+    variant,
     size,
     className,
     children,
-    center = true,
-    fullHeight = false,
-    closeOnOverlayClick = true,
     ...props
   }, ref) => {
+    // Handle escape key
+    useEffect(() => {
+      if (!closeOnEscape) return;
+
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      };
+
+      if (isOpen) {
+        document.addEventListener('keydown', handleEscape);
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+      }
+
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+        document.body.style.overflow = 'unset';
+      };
+    }, [isOpen, closeOnEscape, onClose]);
+
     if (!isOpen) return null;
 
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget && closeOnOverlayClick) {
+    const handleOverlayClick = (e: React.MouseEvent) => {
+      if (closeOnOverlayClick && e.target === e.currentTarget) {
         onClose();
       }
     };
 
     return (
       <div
-        className={modalOverlayVariants({ center })}
+        className={overlayVariants({ variant })}
         onClick={handleOverlayClick}
-        aria-modal="true"
-        role="dialog"
-        aria-labelledby={title ? 'modal-title' : undefined}
-        aria-describedby={description ? 'modal-description' : undefined}
+        {...props}
       >
         <div
           ref={ref}
-          className={modalContentVariants({ size, fullHeight, className })}
-          {...props}
+          className={modalVariants({ size, className })}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? 'modal-title' : undefined}
+          aria-describedby={description ? 'modal-description' : undefined}
         >
-          {/* Modal Header */}
-          {(title || description) && (
-            <div className="border-b border-border p-4">
-              {title && (
-                <h2 id="modal-title" className="text-lg font-semibold">
-                  {title}
-                </h2>
-              )}
-              {description && (
-                <p id="modal-description" className="text-text-secondary text-sm mt-1">
-                  {description}
-                </p>
+          {/* Header */}
+          {(title || showCloseButton) && (
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                {title && (
+                  <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
+                    {title}
+                  </h2>
+                )}
+                {description && (
+                  <p id="modal-description" className="mt-1 text-sm text-gray-500">
+                    {description}
+                  </p>
+                )}
+              </div>
+              {showCloseButton && (
+                <button
+                  onClick={onClose}
+                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-plum focus:ring-offset-2"
+                  aria-label="Close modal"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               )}
             </div>
           )}
 
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-lavender-100 text-lavender-900 hover:bg-lavender-200"
-            aria-label="Close modal"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 4L4 12M4 4L12 12"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-
-          {/* Modal Content */}
-          <div className="p-4 overflow-auto flex-1">{children}</div>
+          {/* Content */}
+          <div className="px-6 py-4">
+            {children}
+          </div>
         </div>
       </div>
     );
   }
 );
+
 Modal.displayName = 'Modal';
 
-export { Modal };
+// Error Modal Component
+export interface ErrorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+export const ErrorModal: React.FC<ErrorModalProps> = ({
+  isOpen,
+  onClose,
+  title = 'Error',
+  message,
+  actionLabel = 'Try Again',
+  onAction,
+}) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4">
+          <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+        </div>
+        <p className="text-sm text-gray-600 mb-6">{message}</p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          {onAction && (
+            <Button onClick={onAction}>
+              {actionLabel}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// Success Modal Component
+export interface SuccessModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+export const SuccessModal: React.FC<SuccessModalProps> = ({
+  isOpen,
+  onClose,
+  title = 'Success',
+  message,
+  actionLabel = 'Continue',
+  onAction,
+}) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
+          <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p className="text-sm text-gray-600 mb-6">{message}</p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          {onAction && (
+            <Button onClick={onAction}>
+              {actionLabel}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export { Modal, modalVariants, overlayVariants };

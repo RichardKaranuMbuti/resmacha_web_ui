@@ -13,6 +13,8 @@
 # testing
 /coverage
 
+dummy.txr
+
 # next.js
 /.next/
 /out/
