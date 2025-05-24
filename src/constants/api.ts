@@ -3,6 +3,8 @@
 // Base URLs for different microservices
 export const API_BASE_URLS = {
   AUTH: 'http://localhost:8004',
+  SCRAPPING: 'http://localhost:8002',
+  MATCHING: 'http://localhost:8003',
  
   // Add more microservices as needed
 } as const;
@@ -24,7 +26,16 @@ export const API_ENDPOINTS = {
   USER: {
    
   },
-  
+
+  // Scrapping endpoints
+  SCRAPPING: {
+    LINKDIN_JOB: '/linkedin/jobs/scrape',
+  },
+  // Matching endpoints
+  MATCHING: {
+    JOB_MATCH: '/api/matching/match',
+    JOB_MATCH_RESULT: '/api/matching/results',
+  }
   // Add more endpoint groups as needed
   
 } as const;
