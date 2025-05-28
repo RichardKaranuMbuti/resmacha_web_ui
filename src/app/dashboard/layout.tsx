@@ -22,42 +22,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <div className="lg:hidden">
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <DashboardSidebar 
+        isOpen={isSidebarOpen}
+        onToggle={handleMenuToggle}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1">
+        {/* Header */}
         <DashboardHeader 
           onMenuToggle={handleMenuToggle}
           onSearch={handleSearch}
         />
-      </div>
-
-      <div className="flex">
-        {/* Sidebar - Hidden on mobile, controlled by state */}
-        <div className={`lg:block ${isSidebarOpen ? 'block' : 'hidden'}`}>
-          <DashboardSidebar />
-        </div>
-
+        
         {/* Main Content */}
-        <div className="flex-1 lg:pl-64">
-          <div className="hidden lg:block">
-            <DashboardHeader 
-              onMenuToggle={handleMenuToggle}
-              onSearch={handleSearch}
-            />
-          </div>
-          <main className="pb-8">
-            {children}
-          </main>
-        </div>
+        <main className="flex-1 ">
+          {children}
+        </main>
       </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
     </div>
   );
 }

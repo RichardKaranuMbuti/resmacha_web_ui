@@ -1,3 +1,4 @@
+
 // src/app/dashboard/page.tsx
 import ActivityFeed from '@src/components/dashboard/ActivityFeed';
 import ApplicationInsights from '@src/components/dashboard/ApplicationInsights';
@@ -27,8 +28,8 @@ const mockUserData = {
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-lavender-50 p-4 md:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="bg-gradient-to-br from-purple-50 to-lavender-50 p-4 md:p-6 lg:p-8">
+      <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

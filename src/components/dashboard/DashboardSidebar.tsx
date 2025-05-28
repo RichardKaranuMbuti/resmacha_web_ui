@@ -1,5 +1,6 @@
 // src/components/dashboard/DashboardSidebar.tsx
 'use client';
+import { useRouter } from 'next/navigation';
 import {
   BarChart3,
   Bell,
@@ -51,7 +52,7 @@ export default function DashboardSidebar({
       id: 'job-search', 
       label: 'Job Search', 
       icon: Search, 
-      href: '/dashboard/search' 
+      href: '/home' 
     },
     { 
       id: 'matches', 
@@ -101,10 +102,12 @@ export default function DashboardSidebar({
     return colors[color as keyof typeof colors] || colors.purple;
   };
 
+    
+  const router = useRouter();
+
   const handleNavClick = (itemId: string, href: string) => {
     setActiveItem(itemId);
-    // Here you would typically handle navigation
-    console.log(`Navigating to: ${href}`);
+    router.push(href);
   };
 
   const handleUserMenuToggle = () => {
