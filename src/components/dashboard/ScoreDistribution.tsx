@@ -53,10 +53,10 @@ export default function ScoreDistribution() {
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
-                  formatter={(value: number, name: string) => [
-                    `${value} jobs (${scoreDistributionData.find(d => d.count === value)?.percentage}%)`,
-                    'Count'
-                  ]}
+                  formatter={(value: number) => [
+                  `${value} jobs (${scoreDistributionData.find(d => d.count === value)?.percentage}%)`,
+                  'Count'
+                ]}
                 />
                 <Bar 
                   dataKey="count" 

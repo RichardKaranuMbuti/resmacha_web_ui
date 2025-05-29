@@ -32,7 +32,8 @@ export interface LoginResponse {
   expires_in: number;
 }
 
-export interface RegisterResponse extends User {}
+// Fix for empty interface - use type alias instead
+export type RegisterResponse = User;
 
 export interface RefreshTokenRequest {
   refresh_token: string;
@@ -55,9 +56,75 @@ export interface AuthContextType {
   refreshToken: () => Promise<void>;
 }
 
+// Define specific types for API error details
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export interface ApiErrorDetails {
+  validation_errors?: ValidationError[];
+  timestamp?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
 export interface ApiError {
   message: string;
   status: number;
   code?: string;
-  details?: any;
+  details?: ApiErrorDetails;
+}
+
+// Additional utility types for auth
+export interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}
+
+export interface AuthState {
+  user: User | null;
+  tokens: TokenPair | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+// OAuth-specific types
+export interface GoogleAuthResponse {
+  credential: string;
+  select_by: string;
+}
+
+export interface OAuthLoginRequest {
+  provider: 'google';
+  token: string;
+}
+
+// Password reset types
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+  confirm_password: string;
+}
+
+export interface PasswordResetResponse {
+  message: string;
+}
+
+// Profile update types
+export interface UpdateProfileRequest {
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
 }

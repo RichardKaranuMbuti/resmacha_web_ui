@@ -22,23 +22,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Sidebar */}
       <DashboardSidebar 
         isOpen={isSidebarOpen}
         onToggle={handleMenuToggle}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1">
-        {/* Header */}
+      {/* Main Content Area - with left margin to account for fixed sidebar */}
+      <div className={`
+        min-h-screen transition-all duration-300 ease-in-out
+        ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'}
+        lg:ml-64
+      `}>
+        {/* Header - also needs to account for sidebar */}
         <DashboardHeader 
           onMenuToggle={handleMenuToggle}
           onSearch={handleSearch}
         />
         
         {/* Main Content */}
-        <main className="flex-1 ">
+        <main className="p-6">
           {children}
         </main>
       </div>

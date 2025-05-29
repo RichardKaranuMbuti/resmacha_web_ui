@@ -88,7 +88,6 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
     ...props
   }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
-    const [focused, setFocused] = useState(false);
 
     const inputId = id || `textfield-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -168,11 +167,9 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
               ].filter(Boolean).join(' ')
             })}
             onFocus={(e) => {
-              setFocused(true);
               props.onFocus?.(e);
             }}
             onBlur={(e) => {
-              setFocused(false);
               props.onBlur?.(e);
             }}
             {...props}

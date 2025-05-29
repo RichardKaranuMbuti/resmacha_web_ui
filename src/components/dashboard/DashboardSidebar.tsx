@@ -21,7 +21,7 @@ import { useState } from 'react';
 interface NavigationItem {
   id: string;
   label: string;
-  icon: any;
+   icon: React.ComponentType<{ className?: string }>;
   href: string;
   badge?: string;
   badgeColor?: 'purple' | 'green' | 'blue' | 'red';
@@ -129,17 +129,17 @@ export default function DashboardSidebar({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Fixed Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 
-        transform transition-transform duration-300 ease-in-out
-        lg:translate-x-0 lg:static lg:inset-0
+        fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-200 
+        transform transition-transform duration-300 ease-in-out z-50
+        lg:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         ${className}
       `}>
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          {/* Header - Fixed */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white font-bold text-sm">R</span>
@@ -156,8 +156,8 @@ export default function DashboardSidebar({
             </button>
           </div>
 
-          {/* User Profile */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          {/* User Profile - Fixed */}
+          <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
             <div 
               className={`
                 flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors
@@ -190,8 +190,10 @@ export default function DashboardSidebar({
             )}
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Navigation */}
+            <nav className="px-3 py-4 space-y-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeItem === item.id;
@@ -226,41 +228,42 @@ export default function DashboardSidebar({
                 </button>
               );
             })}
-          </nav>
+            </nav>
 
-          {/* Quick Stats */}
-          <div className="px-6 py-4 border-t border-gray-200">
-            <div className="bg-gradient-to-br from-purple-50 via-purple-50 to-purple-100 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="w-4 h-4 text-purple-600" />
-                <h3 className="text-sm font-semibold text-purple-900">This Week</h3>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-purple-700">New matches</span>
-                  <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">23</span>
+            {/* Quick Stats */}
+            <div className="px-6 py-4 border-t border-gray-200">
+              <div className="bg-gradient-to-br from-purple-50 via-purple-50 to-purple-100 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className="w-4 h-4 text-purple-600" />
+                  <h3 className="text-sm font-semibold text-purple-900">This Week</h3>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-purple-700">Applications</span>
-                  <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">5</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-purple-700">Responses</span>
-                  <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">2</span>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-purple-700">New matches</span>
+                    <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">23</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-purple-700">Applications</span>
+                    <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">5</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-purple-700">Responses</span>
+                    <span className="font-semibold text-purple-900 bg-white px-2 py-1 rounded-md shadow-sm">2</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Logout */}
-          <div className="px-6 py-4 border-t border-gray-200">
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 rounded-lg transition-all duration-200 group"
-            >
-              <LogOut className="w-5 h-5 group-hover:text-red-600 transition-colors" />
-              <span>Logout</span>
-            </button>
+            {/* Logout */}
+            <div className="px-6 py-4 border-t border-gray-200">
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 rounded-lg transition-all duration-200 group"
+              >
+                <LogOut className="w-5 h-5 group-hover:text-red-600 transition-colors" />
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

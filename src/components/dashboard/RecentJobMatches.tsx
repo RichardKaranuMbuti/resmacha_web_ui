@@ -69,12 +69,6 @@ export default function RecentJobMatches() {
     return 'text-red-700 bg-red-100';
   };
 
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 85) return 'bg-green-500';
-    if (score >= 70) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
-
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-6">

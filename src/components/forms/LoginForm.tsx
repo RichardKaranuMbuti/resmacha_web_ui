@@ -301,7 +301,7 @@ export const LoginForm: React.FC = () => {
             {/* Signup Link */}
             <div className="text-center">
               <p className="text-sm text-gray-600">
-                Don't have an account?{' '}
+                Don&apos;t have an account?{' '}
                 <a
                   href="/signup"
                   className="font-medium text-plum hover:text-plum-dark transition-colors duration-200"

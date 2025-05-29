@@ -1,7 +1,7 @@
 // src/app/home/results/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useJobMatching } from '@src/hooks/useJobMatching';
 import { JobMatch } from '@src/types/jobMatch';
 import { MatchingAnimation } from '@src/components/results/MatchingAnimation';
@@ -28,56 +28,77 @@ export default function ResultsPage() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
 
-  const handleStartMatching = async () => {
+  const handleStartMatching = useCallback(async () => {
     try {
       await startMatching();
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to start job matching:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while starting job matching';
+      setError(errorMessage);
       setShowErrorModal(true);
     }
-  };
+  }, [startMatching, setError]);
 
-  const handleLoadResults = async () => {
+  const handleLoadResults = useCallback(async () => {
     try {
       await loadResults();
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to load job results:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while loading results';
+      setError(errorMessage);
       setShowErrorModal(true);
     }
-  };
+  }, [loadResults, setError]);
 
-  const handleJobClick = (job: JobMatch) => {
+  const handleJobClick = useCallback((job: JobMatch) => {
     setSelectedJob(job);
     setShowJobModal(true);
-  };
+  }, []);
 
-  const handleCloseErrorModal = () => {
+  const handleCloseJobModal = useCallback(() => {
+    setShowJobModal(false);
+    setSelectedJob(null);
+  }, []);
+
+  const handleCloseErrorModal = useCallback(() => {
     setShowErrorModal(false);
     setError('');
+  }, [setError]);
+
+  const renderContent = () => {
+    if (!hasStartedMatching && !jobs.length) {
+      return (
+        <StartMatchingView
+          onStartMatching={handleStartMatching}
+          onLoadResults={handleLoadResults}
+          isMatching={isMatching}
+        />
+      );
+    }
+
+    if (isMatching) {
+      return <MatchingAnimation matchingStats={matchingStats} />;
+    }
+
+    return (
+      <div className="space-y-8">
+        <ResultsHeader jobCount={jobs.length} />
+        <StatsCards jobs={jobs} />
+        <JobGrid jobs={jobs} onJobClick={handleJobClick} />
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="container mx-auto px-4 py-8">
-        {!hasStartedMatching && !jobs.length ? (
-          <StartMatchingView
-            onStartMatching={handleStartMatching}
-            onLoadResults={handleLoadResults}
-            isMatching={isMatching}
-          />
-        ) : isMatching ? (
-          <MatchingAnimation matchingStats={matchingStats} />
-        ) : (
-          <div>
-            <ResultsHeader jobCount={jobs.length} />
-            <StatsCards jobs={jobs} />
-            <JobGrid jobs={jobs} onJobClick={handleJobClick} />
-          </div>
-        )}
+        {renderContent()}
       </div>
 
       <JobDetailModal 
         job={selectedJob}
         isOpen={showJobModal}
-        onClose={() => setShowJobModal(false)}
+        onClose={handleCloseJobModal}
       />
 
       <ErrorModal 

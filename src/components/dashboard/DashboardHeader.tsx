@@ -19,6 +19,7 @@ import {
   User
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
 interface Notification {
   id: string;
@@ -329,7 +330,7 @@ export default function DashboardHeader({
             >
               <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center">
                 {userAvatar ? (
-                  <img src={userAvatar} alt={userName} className="w-8 h-8 rounded-full object-cover" />
+                  <Image src={userAvatar} alt={userName} width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
                 ) : (
                   <User className="w-4 h-4 text-purple-600" />
                 )}

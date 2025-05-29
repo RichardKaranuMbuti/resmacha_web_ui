@@ -28,6 +28,25 @@ interface FormErrors {
   confirmPassword?: string;
 }
 
+// Define types for API error details
+interface ValidationError {
+  msg?: string;
+  message?: string;
+  field?: string;
+  type?: string;
+}
+
+interface ApiErrorDetails {
+  detail?: string | ValidationError[] | Record<string, unknown>;
+  message?: string;
+  errors?: ValidationError[];
+}
+
+// Extend the ApiError type to include better typing for details
+interface TypedApiError extends Omit<ApiError, 'details'> {
+  details?: ApiErrorDetails;
+}
+
 const INITIAL_FORM_DATA: SignupFormData = {
   email: '',
   username: '',
@@ -153,8 +172,22 @@ export const SignupForm: React.FC = () => {
     }
   };
 
-  // Parse API error messages
-  const parseApiError = (error: ApiError): string => {
+  // Type guard to check if a value is a string
+  const isString = (value: unknown): value is string => {
+    return typeof value === 'string';
+  };
+
+  // Type guard to check if a value is a ValidationError
+  const isValidationError = (value: unknown): value is ValidationError => {
+    return (
+      typeof value === 'object' && 
+      value !== null && 
+      ('msg' in value || 'message' in value)
+    );
+  };
+
+  // Parse API error messages with proper typing
+  const parseApiError = (error: TypedApiError): string => {
     console.log('Full API Error:', error); // Debug log
     
     // Handle specific error cases based on your API responses
@@ -166,10 +199,21 @@ export const SignupForm: React.FC = () => {
       // Handle validation errors from backend
       if (error.details?.detail) {
         if (Array.isArray(error.details.detail)) {
-          return error.details.detail.map((err: any) => err.msg || err.message).join(', ');
+          const validationErrors = error.details.detail
+            .filter(isValidationError)
+            .map((err: ValidationError) => err.msg || err.message || 'Validation error')
+            .filter(Boolean);
+          
+          if (validationErrors.length > 0) {
+            return validationErrors.join(', ');
+          }
         }
-        return error.details.detail;
+        
+        if (isString(error.details.detail)) {
+          return error.details.detail;
+        }
       }
+      
       return 'Please check your information and try again.';
     }
     
@@ -241,7 +285,7 @@ export const SignupForm: React.FC = () => {
     } catch (error) {
       console.error('Signup error:', error);
       
-      const apiError = error as ApiError;
+      const apiError = error as TypedApiError;
       const errorMsg = parseApiError(apiError);
       
       setErrorMessage(errorMsg);
@@ -427,10 +471,6 @@ export const SignupForm: React.FC = () => {
               disabled={isFormDisabled}
               size="lg"
               className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={(e) => {
-                console.log('Button clicked'); // Debug log
-                // The form's onSubmit will handle the actual submission
-              }}
             >
               {isSubmitting ? (
                 <div className="flex items-center justify-center gap-2">

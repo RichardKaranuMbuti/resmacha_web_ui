@@ -107,7 +107,6 @@ export default function ActivityFeed() {
     }
   };
 
-  // Fix 1: Use strict typing and type assertion
   const getStatusBadge = (status?: ActivityStatus) => {
     if (!status) return null;
     
@@ -116,26 +115,6 @@ export default function ActivityFeed() {
       warning: 'bg-orange-100 text-orange-800',
       info: 'bg-blue-100 text-blue-800'
     };
-
-    return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badgeClasses[status]}`}>
-        {status}
-      </span>
-    );
-  };
-
-  // Alternative Fix 2: Using bracket notation with proper type checking
-  const getStatusBadgeAlt = (status?: string) => {
-    if (!status) return null;
-    
-    const badgeClasses: { [key: string]: string } = {
-      success: 'bg-green-100 text-green-800',
-      warning: 'bg-orange-100 text-orange-800',
-      info: 'bg-blue-100 text-blue-800'
-    };
-
-    // Check if status exists in badgeClasses before using it
-    if (!(status in badgeClasses)) return null;
 
     return (
       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badgeClasses[status]}`}>
@@ -171,7 +150,7 @@ export default function ActivityFeed() {
       </div>
 
       <div className="space-y-4">
-        {mockActivityData.map((activity, index) => (
+        {mockActivityData.map((activity) => (
           <div key={activity.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
             <div className="flex-shrink-0 mt-0.5">
               {getActivityIcon(activity.type, activity.status)}

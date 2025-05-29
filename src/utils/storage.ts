@@ -14,6 +14,22 @@ interface StorageItem<T> {
   expiry?: number;
 }
 
+// User data types
+interface UserData {
+  id: string;
+  email: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+// App settings types
+interface AppSettings {
+  theme?: 'light' | 'dark' | 'system';
+  notifications?: boolean;
+  language?: string;
+  [key: string]: unknown;
+}
+
 class StorageManager {
   private getStorage(type: StorageType): Storage | null {
     if (typeof window === 'undefined') return null;
@@ -33,7 +49,7 @@ class StorageManager {
     return decodeURIComponent(atob(data));
   }
 
-  private isExpired(item: StorageItem<any>): boolean {
+  private isExpired(item: StorageItem<unknown>): boolean {
     if (!item.expiry) return false;
     return Date.now() > item.expiry;
   }
@@ -149,7 +165,7 @@ class StorageManager {
     if (!item) return false;
 
     try {
-      const storageItem: StorageItem<any> = JSON.parse(item);
+      const storageItem: StorageItem<unknown> = JSON.parse(item);
       return !this.isExpired(storageItem);
     } catch {
       return false;
@@ -184,41 +200,62 @@ const storage = new StorageManager();
 // Convenience functions for common operations
 export const storageUtils = {
   // User data (non-sensitive)
-  setUserData: (userData: any) => 
+  setUserData: (userData: UserData): boolean => 
     storage.set('user_data', userData, { expiryInMinutes: 24 * 60 }), // 24 hours
   
-  getUserData: () => 
-    storage.get('user_data'),
+  getUserData: (): UserData | null => 
+    storage.get<UserData>('user_data'),
   
   // Tokens (sensitive)
-  setTokens: (accessToken: string, refreshToken: string, expiresIn?: number) => {
+  setTokens: (accessToken: string, refreshToken: string, expiresIn?: number): boolean => {
     const expiryMinutes = expiresIn ? Math.floor(expiresIn / 60) - 5 : undefined; // 5 min buffer
-    storage.set('access_token', accessToken, { encrypt: true, expiryInMinutes: expiryMinutes });
-    storage.set('refresh_token', refreshToken, { encrypt: true });
+    const accessResult = storage.set('access_token', accessToken, { encrypt: true, expiryInMinutes: expiryMinutes });
+    const refreshResult = storage.set('refresh_token', refreshToken, { encrypt: true });
+    return accessResult && refreshResult;
   },
   
-  getAccessToken: () => 
+  getAccessToken: (): string | null => 
     storage.get<string>('access_token', { encrypt: true }),
   
-  getRefreshToken: () => 
+  getRefreshToken: (): string | null => 
     storage.get<string>('refresh_token', { encrypt: true }),
   
   // Settings
-  setSettings: (settings: any) => 
+  setSettings: (settings: AppSettings): boolean => 
     storage.set('app_settings', settings),
   
-  getSettings: () => 
-    storage.get('app_settings'),
+  getSettings: (): AppSettings | null => 
+    storage.get<AppSettings>('app_settings'),
   
   // Clear all auth data
-  clearAuthData: () => {
-    storage.remove('access_token');
-    storage.remove('refresh_token');
-    storage.remove('user_data');
+  clearAuthData: (): boolean => {
+    const accessResult = storage.remove('access_token');
+    const refreshResult = storage.remove('refresh_token');
+    const userResult = storage.remove('user_data');
+    return accessResult && refreshResult && userResult;
   },
   
   // Clear all app data
-  clearAllData: () => storage.clear(),
+  clearAllData: (): boolean => storage.clear(),
+
+  // Generic storage methods with proper typing
+  setItem: <T>(key: string, value: T, options?: StorageOptions): boolean =>
+    storage.set(key, value, options),
+  
+  getItem: <T>(key: string, options?: Pick<StorageOptions, 'type' | 'encrypt'>): T | null =>
+    storage.get<T>(key, options),
+  
+  removeItem: (key: string, options?: Pick<StorageOptions, 'type'>): boolean =>
+    storage.remove(key, options),
+  
+  itemExists: (key: string, options?: Pick<StorageOptions, 'type'>): boolean =>
+    storage.exists(key, options),
+  
+  getAllKeys: (options?: Pick<StorageOptions, 'type'>): string[] =>
+    storage.getAllKeys(options),
 };
+
+// Export types for use in other files
+export type { UserData, AppSettings, StorageOptions, StorageType };
 
 export default storage;

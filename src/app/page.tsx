@@ -54,7 +54,7 @@ export default function HomePage() {
                     </span>
                   </h1>
                   <p className="text-xl text-[var(--text-secondary)] leading-relaxed">
-                    Upload your resume, set your preferences, and let our AI agents find jobs where you're actually a great fit. 
+                    Upload your resume, set your preferences, and let our AI agents find jobs where you&#39;re actually a great fit. 
                     No more endless scrolling through irrelevant listings.
                   </p>
                 </div>
@@ -144,7 +144,7 @@ export default function HomePage() {
                       </div>
                       <LoginForm />
                       <div className="text-center text-sm text-[var(--text-secondary)]">
-                        Don't have an account?{" "}
+                        Don&#39;t have an account?{" "}
                         <button
                           onClick={() => setActiveTab('signup')}
                           className="text-[var(--lavender-600)] hover:text-[var(--lavender-700)] font-semibold"
@@ -225,7 +225,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-[var(--text-primary)] mb-4">Get Smart Matches</h3>
                 <p className="text-[var(--text-secondary)]">
-                  Receive scored job matches based on real fit analysis. Set your notification threshold and only get alerted for jobs where you're truly competitive.
+                  Receive scored job matches based on real fit analysis. Set your notification threshold and only get alerted for jobs where you&#39;re truly competitive.
                 </p>
               </div>
             </div>
@@ -240,7 +240,7 @@ export default function HomePage() {
                 Why Resmacha is Different
               </h2>
               <p className="text-xl text-[var(--text-secondary)] max-w-3xl mx-auto">
-                We don't use traditional ML techniques like cosine similarity or basic RAG. Our AI agents reason like human recruiters, 
+                We don&#39;t use traditional ML techniques like cosine similarity or basic RAG. Our AI agents reason like human recruiters, 
                 scrutinizing job descriptions against your unique profile.
               </p>
             </div>
@@ -252,7 +252,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-[var(--text-primary)] mb-4">Human-Like AI Reasoning</h3>
                 <p className="text-[var(--text-secondary)]">
-                  Our AI doesn't just match keywords. It understands context, analyzes requirements, and evaluates your actual fit for each role.
+                  Our AI doesn&#39;t just match keywords. It understands context, analyzes requirements, and evaluates your actual fit for each role.
                 </p>
               </div>
               

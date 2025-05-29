@@ -74,7 +74,7 @@ export default function HomeLayout({ children }: HomeLayoutProps) {
                 }`}
               >
                 <Search className="w-4 h-4 mr-2" />
-                Apply
+                Deploy Crawlers
               </Link>
               <Link 
                 href="/home/results"

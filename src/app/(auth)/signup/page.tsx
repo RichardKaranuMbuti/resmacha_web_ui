@@ -30,7 +30,7 @@ export default function SignupPage() {
                 Stop Wasting Time on Wrong Jobs
               </h1>
               <p className="text-xl text-text-secondary dark:text-text-secondary mb-8">
-                Let AI agents find the perfect job matches for you. Upload your resume, set your preferences, and get only the jobs where you're a great fit.
+                Let AI agents find the perfect job matches for you. Upload your resume, set your preferences, and get only the jobs where you&apos;re a great fit.
               </p>
             </div>
 
@@ -42,7 +42,7 @@ export default function SignupPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-text-primary dark:text-text-light">AI-Powered Job Reasoning</h3>
-                  <p className="text-text-secondary dark:text-text-secondary">Our AI doesn't just match keywords - it reasons like a human recruiter, analyzing job requirements against your actual skills and experience</p>
+                  <p className="text-text-secondary dark:text-text-secondary">Our AI doesn&apos;t just match keywords - it reasons like a human recruiter, analyzing job requirements against your actual skills and experience</p>
                 </div>
               </div>
               
@@ -90,7 +90,7 @@ export default function SignupPage() {
             {/* Testimonial */}
             <div className="bg-gradient-to-r from-lavender-50 to-lavender-100 dark:from-lavender-900/20 dark:to-lavender-800/20 p-6 rounded-xl border border-lavender-200 dark:border-lavender-700/50">
               <p className="text-text-primary dark:text-text-light italic mb-4">
-                "Finally, a job search tool that actually understands what I'm looking for. Instead of applying to 100 jobs and hearing nothing, I applied to 8 high-fit positions and got 3 interviews!"
+                &quot;Finally, a job search tool that actually understands what I&apos;m looking for. Instead of applying to 100 jobs and hearing nothing, I applied to 8 high-fit positions and got 3 interviews!&quot;
               </p>
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-lavender-500 to-lavender-600 rounded-full flex items-center justify-center text-white font-semibold">

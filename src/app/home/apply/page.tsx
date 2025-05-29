@@ -62,7 +62,7 @@ const LoadingAnimation = () => (
         <div className="space-y-2 text-sm">
           <p className="text-gray-600 animate-pulse">Our AI agents are scouring the web...</p>
           <p className="text-gray-600 animate-pulse delay-500">Finding the perfect jobs for you...</p>
-          <p className="text-gray-600 animate-pulse delay-1000">This won't take long! ⚡</p>
+          <p className="text-gray-600 animate-pulse delay-1000">This won&#39;t take long! ⚡</p>
         </div>
       </div>
       
@@ -138,8 +138,8 @@ export default function ApplyPage() {
             Find Your Perfect Job
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Let our AI agents do the heavy lifting. Just tell us what you're looking for, 
-            and we'll find opportunities that match your skills perfectly.
+            Let our AI agents do the heavy lifting. Just tell us what you&#39;re looking for, 
+            and we&#39;ll find opportunities that match your skills perfectly.
           </p>
         </div>
 

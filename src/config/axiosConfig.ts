@@ -1,7 +1,18 @@
 // src/config/axiosConfig.ts
-import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { API_BASE_URLS, REQUEST_TIMEOUT } from '../constants/api';
 import { storageUtils } from '../utils/storage';
+
+// Define types for better type safety
+interface AuthTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}
+
+interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 // Create axios instance for auth API
 export const authAxios: AxiosInstance = axios.create({
@@ -62,11 +73,11 @@ const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
   return response;
 };
 
-const errorInterceptor = async (error: any): Promise<any> => {
-  const originalRequest = error.config;
+const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
+  const originalRequest = error.config as ExtendedAxiosRequestConfig;
 
   // If the error is 401 and we haven't already tried to refresh
-  if (error.response?.status === 401 && !originalRequest._retry) {
+  if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
     originalRequest._retry = true;
 
     try {
@@ -76,7 +87,7 @@ const errorInterceptor = async (error: any): Promise<any> => {
       }
 
       // Try to refresh the token
-      const response = await authAxios.post('/api/v1/auth/refresh-token', {
+      const response = await authAxios.post<AuthTokenResponse>('/api/v1/auth/refresh-token', {
         refresh_token: currentRefreshToken
       });
 
@@ -87,6 +98,7 @@ const errorInterceptor = async (error: any): Promise<any> => {
       storageUtils.setTokens(access_token, newRefreshToken, expires_in);
 
       // Retry the original request with new token
+      originalRequest.headers = originalRequest.headers || {};
       originalRequest.headers.Authorization = `Bearer ${access_token}`;
       return axios(originalRequest);
 
