@@ -1,82 +1,75 @@
-# --- Base image for all stages ---
-FROM node:18-alpine AS base
-LABEL maintainer="resmatcha-team"
-LABEL description="Next.js Frontend Application"
+# Production Dockerfile for Next.js Application
+# Multi-stage build for optimized production image
 
-# Install dependencies needed for all stages
-RUN apk add --no-cache libc6-compat
-
+# Stage 1: Dependencies
+FROM node:18-alpine AS deps
 WORKDIR /app
 
-# --- Dependencies stage ---
-FROM base AS deps
+# Install dependencies only when needed
+COPY package.json package-lock.json ./
+RUN npm ci --only=production --ignore-scripts && \
+    npm cache clean --force
 
-# Copy only the package files to install dependencies
-COPY package.json package-lock.json* ./
+# Stage 2: Builder
+FROM node:18-alpine AS builder
+WORKDIR /app
 
-# Install ALL dependencies including devDependencies
-RUN npm ci --frozen-lockfile
+# Copy package files
+COPY package.json package-lock.json ./
 
-# --- Builder stage ---
-FROM base AS builder
+# Install all dependencies (including devDependencies)
+RUN npm ci --ignore-scripts
 
-# Copy installed node_modules from deps
-COPY --from=deps /app/node_modules ./node_modules
-
-# Copy only necessary files to build the app
-COPY public ./public
-COPY src ./src
-COPY next.config.ts ./
-COPY tsconfig.json ./
-COPY tailwind.config.ts ./
-COPY postcss.config.mjs ./
-COPY .env ./
-COPY middleware.ts ./
-COPY next-env.d.ts ./
-COPY eslint.config.mjs ./
-
-# Environment variables for build
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Copy source code
+COPY . .
 
 # Build the application
 RUN npm run build
 
-# --- Runner stage for production ---
-FROM base AS runner
+# Stage 3: Production runner
+FROM node:18-alpine AS runner
 
-# Install curl for health checks
-RUN apk add --no-cache curl
-
-# Create a non-root user
-RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nextjs
-
-WORKDIR /app
-
-# Set environment variables
+# Set environment
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-# Copy only what is needed for running the app
-COPY --from=builder /app/public ./public
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+WORKDIR /app
+
+# Copy production dependencies
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Copy built application
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Set ownership and permissions
-RUN chown -R nextjs:nodejs /app
+# Create .next directory and set permissions
+RUN mkdir -p .next && chown -R nextjs:nodejs .next
 
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+# Security hardening
+RUN apk --no-cache add dumb-init && \
+    apk --no-cache del wget curl && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/* && \
+    chmod -R 755 /app && \
+    find /app -type f -name "*.sh" -exec chmod +x {} \;
 
-# Use non-root user
+# Switch to non-root user
 USER nextjs
 
-# Expose app port
+# Expose port
 EXPOSE 3000
 
-# Start the Next.js app
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
 CMD ["node", "server.js"]
