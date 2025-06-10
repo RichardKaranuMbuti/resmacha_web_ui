@@ -232,7 +232,7 @@ export const SignupForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('Form submitted'); // Debug log
+    console.log('📝 Form submitted - starting validation');
     
     // Clear any previous messages
     setInlineError('');
@@ -240,25 +240,25 @@ export const SignupForm: React.FC = () => {
     
     // Prevent double submission
     if (isSubmitting || isLoading) {
-      console.log('Already submitting or loading'); // Debug log
+      console.log('⏸️ Already submitting or loading, preventing duplicate submission');
       return;
     }
 
     // Validate form
     if (!validateForm()) {
-      console.log('Form validation failed'); // Debug log
+      console.log('❌ Form validation failed');
       setInlineError('Please fix the errors above and try again.');
       return;
     }
 
-    console.log('Starting registration process'); // Debug log
+    console.log('✅ Form validation passed');
     setIsSubmitting(true);
 
     try {
       // Show immediate feedback
       setInlineSuccess('Creating your account...');
       
-      // Prepare data for API - matching your backend structure exactly
+      // Prepare data for API
       const registerData: RegisterRequest = {
         email: formData.email.trim().toLowerCase(),
         username: formData.username.trim(),
@@ -267,14 +267,17 @@ export const SignupForm: React.FC = () => {
         password: formData.password,
       };
 
-      console.log('Calling register with data:', { ...registerData, password: '[HIDDEN]' }); // Debug log
+      console.log('🚀 Calling register with data:', { 
+        ...registerData, 
+        password: '[HIDDEN]' 
+      });
 
-      // Call register from AuthProvider - this handles API call and auto-login
+      // IMPORTANT: Make sure register function is called properly
       await register(registerData);
       
-      console.log('Registration successful'); // Debug log
+      console.log('✅ Registration completed successfully');
       
-      // Success - show success modal
+      // Success feedback
       setInlineSuccess('Account created successfully! Redirecting...');
       setShowSuccessModal(true);
       
@@ -283,16 +286,19 @@ export const SignupForm: React.FC = () => {
       setErrors({});
 
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('❌ Signup error:', error);
       
       const apiError = error as TypedApiError;
       const errorMsg = parseApiError(apiError);
+      
+      console.log('📝 Parsed error message:', errorMsg);
       
       setErrorMessage(errorMsg);
       setInlineError(errorMsg);
       setShowErrorModal(true);
     } finally {
       setIsSubmitting(false);
+      console.log('🏁 Registration process completed');
     }
   };
 

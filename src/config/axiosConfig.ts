@@ -1,6 +1,5 @@
-// src/config/axiosConfig.ts
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
-import { API_BASE_URLS, REQUEST_TIMEOUT } from '../constants/api';
+import { API_BASE_URLS, API_ENDPOINTS, REQUEST_TIMEOUT } from '../constants/api';
 import { storageUtils } from '../utils/storage';
 
 // Define types for better type safety
@@ -16,7 +15,7 @@ interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
 
 // Create axios instance for auth API
 export const authAxios: AxiosInstance = axios.create({
-  baseURL: API_BASE_URLS.AUTH,
+  baseURL: API_BASE_URLS.USER,
   timeout: REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
@@ -26,7 +25,7 @@ export const authAxios: AxiosInstance = axios.create({
 
 // Create general API instance (for other endpoints)
 export const apiAxios: AxiosInstance = axios.create({
-  baseURL: API_BASE_URLS.AUTH, // You can change this to a general API base URL
+  baseURL: API_BASE_URLS.USER,
   timeout: REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
@@ -86,8 +85,8 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
         throw new Error('No refresh token available');
       }
 
-      // Try to refresh the token
-      const response = await authAxios.post<AuthTokenResponse>('/api/v1/auth/refresh-token', {
+      // FIXED: Use consistent endpoint from constants
+      const response = await authAxios.post<AuthTokenResponse>(API_ENDPOINTS.AUTH.REFRESH, {
         refresh_token: currentRefreshToken
       });
 

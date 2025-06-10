@@ -1,17 +1,31 @@
 // src/constants/api.ts
 
-// Base URLs for different microservices
+// Environment-based configuration
+const isDevelopment = process.env.NODE_ENV === 'development' || 
+                     (typeof window !== 'undefined' && window.location.hostname === 'localhost');
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+
+// Debug logging
+console.log('🔧 API Config Debug:', {
+  NODE_ENV: process.env.NODE_ENV,
+  isDevelopment,
+  NEXT_PUBLIC_API_URL,
+  hasApiUrl: !!NEXT_PUBLIC_API_URL
+});
+
+// Base URLs for different environments
 export const API_BASE_URLS = {
-  AUTH: 'http://localhost:8004',
-  SCRAPPING: 'http://localhost:8002',
-  MATCHING: 'http://localhost:8003',
- 
-  // Add more microservices as needed
+  // In development: direct service URLs
+  // In production: single domain with service prefixes
+  SCRAPING: isDevelopment ? 'http://localhost:8002' : `${NEXT_PUBLIC_API_URL}/api/scraping`, 
+  MATCHING: isDevelopment ? 'http://localhost:8003' : `${NEXT_PUBLIC_API_URL}/api/matching`,
+  USER: isDevelopment ? 'http://localhost:8004' : `${NEXT_PUBLIC_API_URL}/api/users`,
 } as const;
 
-// API Endpoints
+// Consistent API Endpoints (same for both dev and prod)
 export const API_ENDPOINTS = {
-  // Auth endpoints
+  // Auth endpoints - consistent paths
   AUTH: {
     REGISTER: '/api/v1/auth/register',
     LOGIN: '/api/v1/auth/login',
@@ -20,25 +34,38 @@ export const API_ENDPOINTS = {
     VERIFY_EMAIL: '/api/v1/auth/verify-email',
     FORGOT_PASSWORD: '/api/v1/auth/forgot-password',
     RESET_PASSWORD: '/api/v1/auth/reset-password',
+    HEALTH: '/health', // Consistent health check
   },
   
   // User endpoints
   USER: {
-   
+    PROFILE: '/api/v1/users/profile',
+    UPDATE: '/api/v1/users/update',
+    HEALTH: '/health',
   },
 
-  // Scrapping endpoints
-  SCRAPPING: {
-    LINKDIN_JOB: '/linkedin/jobs/scrape',
+  // Scraping endpoints  
+  SCRAPING: {
+    LINKEDIN_JOB: '/api/v1/scraping/linkedin/jobs/scrape',
+    HEALTH: '/health',
   },
+  
   // Matching endpoints
   MATCHING: {
-    JOB_MATCH: '/api/matching/match',
-    JOB_MATCH_RESULT: '/api/matching/results',
+    JOB_MATCH: '/api/v1/matching/match',
+    JOB_MATCH_RESULT: '/api/v1/matching/results',
+    HEALTH: '/health',
   }
-  // Add more endpoint groups as needed
-  
 } as const;
+
+// Helper function to build full URLs
+export const buildApiUrl = (service: keyof typeof API_BASE_URLS, endpoint: string): string => {
+  return `${API_BASE_URLS[service]}${endpoint}`;
+};
+
+// Usage examples:
+// Development: http://localhost:8004/api/v1/auth/register
+// Production: http://resmatcha-api.eastus.cloudapp.azure.com/api/auth/api/v1/auth/register
 
 // HTTP Status Codes
 export const HTTP_STATUS = {

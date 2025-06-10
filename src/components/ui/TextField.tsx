@@ -1,16 +1,16 @@
 // src/components/ui/TextField.tsx
 import { cva, type VariantProps } from 'class-variance-authority';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 const inputVariants = cva(
   'w-full rounded-md border px-3 py-2 text-sm transition-colors placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'border-gray-300 bg-white focus:border-plum focus:ring-plum/20',
-        error: 'border-error bg-white focus:border-error focus:ring-error/20',
-        success: 'border-green-500 bg-white focus:border-green-500 focus:ring-green-500/20',
-        ghost: 'border-transparent bg-gray-50 hover:bg-gray-100 focus:bg-white focus:border-plum focus:ring-plum/20',
+        default: 'border-gray-300 bg-white text-gray-900 focus:border-plum focus:ring-plum/20',
+        error: 'border-error bg-white text-gray-900 focus:border-error focus:ring-error/20',
+        success: 'border-green-500 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500/20',
+        ghost: 'border-transparent bg-gray-50 text-gray-900 hover:bg-gray-100 focus:bg-white focus:border-plum focus:ring-plum/20',
       },
       size: {
         sm: 'h-8 px-2 text-xs',
@@ -88,8 +88,10 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
     ...props
   }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
-
-    const inputId = id || `textfield-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedId = useId();
+    
+    // Use provided id or generated one - this ensures consistency between server and client
+    const inputId = id || `textfield-${generatedId}`;
     
     // Determine the current variant based on state
     const currentVariant = error ? 'error' : success ? 'success' : variant;

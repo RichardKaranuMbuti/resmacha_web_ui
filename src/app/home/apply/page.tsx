@@ -96,7 +96,7 @@ export default function ApplyPage() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URLS.SCRAPPING}${API_ENDPOINTS.SCRAPPING.LINKDIN_JOB}?job_title=${encodeURIComponent(jobTitle)}&location=${encodeURIComponent(location)}`,
+        `${API_BASE_URLS.SCRAPING}${API_ENDPOINTS.SCRAPING.LINKEDIN_JOB}?job_title=${encodeURIComponent(jobTitle)}&location=${encodeURIComponent(location)}`,
         {
           method: 'POST',
           headers: {

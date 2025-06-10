@@ -1,7 +1,7 @@
 "use client";
-// src/context/AuthProvider.tsx
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authAxios, clearTokens, setTokens } from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../constants/api';
 import type {
   ApiError,
   AuthContextType,
@@ -43,7 +43,7 @@ interface ErrorResponse {
   message?: string;
   code?: string;
   detail?: string | Array<{ msg?: string; message?: string }>;
-  [key: string]: unknown; // Index signature to match ApiErrorDetails
+  [key: string]: unknown;
 }
 
 interface AxiosError {
@@ -66,7 +66,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedUserData = storageUtils.getUserData();
         const accessToken = storageUtils.getAccessToken();
 
-        // Type guard to ensure the stored data is a valid User object
         const isValidUser = (data: unknown): data is User => {
           return data !== null && 
             typeof data === 'object' &&
@@ -82,7 +81,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (isValidUser(storedUserData) && accessToken) {
           setUser(storedUserData);
         } else if (storedUserData) {
-          // Clear invalid data
           storageUtils.clearAuthData();
         }
       } catch (error) {
@@ -98,17 +96,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = useCallback((): void => {
     try {
-      // Optionally call logout endpoint if you have one
-      // authAxios.post('/api/v1/auth/logout');
+      // Optionally call logout endpoint
+      // authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
-      // Clear all auth data regardless of API call success
       clearTokens();
       storageUtils.clearAuthData();
       setUser(null);
       
-      // Redirect to login page
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
@@ -122,8 +118,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('No refresh token available');
       }
 
-      // Call your refresh API: POST /api/v1/auth/refresh-token
-      const response = await authAxios.post('/api/v1/auth/refresh-token', {
+      // FIXED: Use consistent endpoint
+      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
         refresh_token: currentRefreshToken
       });
 
@@ -143,14 +139,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Call your login API: POST /api/v1/auth/login
+      console.log('🚀 Starting login process with:', { email: credentials.email });
+      
+      // FIXED: Use consistent endpoint and better logging
       const response = await authAxios.post<LoginResponse>(
-        '/api/v1/auth/login',
+        API_ENDPOINTS.AUTH.LOGIN,
         {
           email: credentials.email,
           password: credentials.password
         }
       );
+
+      console.log('✅ Login API response received');
 
       const { access_token, refresh_token } = response.data;
 
@@ -158,16 +158,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setTokens(access_token, refresh_token);
       storageUtils.setTokens(access_token, refresh_token, response.data.expires_in);
 
-      // After login, we need to get user profile
-      // Since your login response doesn't include user data, we need to decode from JWT
+      // Decode JWT token to get user info
       try {
-        // Decode JWT token to get user info
         const tokenParts = access_token.split('.');
         if (tokenParts.length === 3) {
           const payload: TokenPayload = JSON.parse(atob(tokenParts[1]));
           
-          // Create user object from token payload
-          // Note: You might want to make a separate API call to get full user profile
           const userData: User = {
             id: parseInt(payload.sub),
             email: payload.email || credentials.email,
@@ -180,21 +176,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             updated_at: payload.updated_at || new Date().toISOString()
           };
 
-          // Create UserData object with name property for storage
           const userDataForStorage = {
             ...userData,
-            id: userData.id.toString(), // Convert number to string for UserData interface
+            id: userData.id.toString(),
             name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
           };
 
           storageUtils.setUserData(userDataForStorage);
           setUser(userData);
+          
+          console.log('✅ User data set successfully');
         }
       } catch (tokenError) {
         console.error('Error decoding token:', tokenError);
-        // If token decoding fails, create minimal user object
+        // Fallback user object
         const userData: User = {
-          id: Date.now(), // Temporary ID
+          id: Date.now(),
           email: credentials.email,
           username: '',
           first_name: '',
@@ -205,11 +202,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           updated_at: new Date().toISOString()
         };
 
-        // Create UserData object with name property for storage
         const userDataForStorage = {
           ...userData,
-          id: userData.id.toString(), // Convert number to string for UserData interface
-          name: userData.email // Fallback to email as name
+          id: userData.id.toString(),
+          name: userData.email
         };
 
         storageUtils.setUserData(userDataForStorage);
@@ -217,11 +213,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       
       const axiosError = error as AxiosError;
       
-      // Handle different error types from your API
       let errorMessage = 'Login failed. Please try again.';
       let errorStatus = 500;
       
@@ -270,9 +265,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Call your register API: POST /api/v1/auth/register
-      await authAxios.post<RegisterResponse>(
-        '/api/v1/auth/register',
+      console.log('🚀 Starting registration process with:', { 
+        ...userData, 
+        password: '[HIDDEN]' 
+      });
+      
+      // FIXED: Use consistent endpoint and better logging
+      const response = await authAxios.post<RegisterResponse>(
+        API_ENDPOINTS.AUTH.REGISTER,
         {
           email: userData.email,
           username: userData.username,
@@ -282,18 +282,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       );
 
+      console.log('✅ Registration API response received:', response.status);
+
       // Auto-login after successful registration
       await login({
         email: userData.email,
         password: userData.password
       });
 
+      console.log('✅ Auto-login after registration successful');
+
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('❌ Registration error:', error);
       
       const axiosError = error as AxiosError;
       
-      // Handle different error types from your API
       let errorMessage = 'Registration failed. Please try again.';
       let errorStatus = 500;
       
@@ -358,7 +361,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (error) {
         console.error('Auto refresh failed:', error);
       }
-    }, 15 * 60 * 1000); // Refresh every 15 minutes (your token expires in 30 minutes)
+    }, 15 * 60 * 1000); // Refresh every 15 minutes
 
     return () => clearInterval(refreshInterval);
   }, [user, refreshToken]);
