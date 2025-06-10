@@ -1,58 +1,48 @@
-# Production Dockerfile for Next.js Application
+# Production Dockerfile for Next.js Application with src/ structure
 # Multi-stage build for optimized production image
 
-# Stage 1: Base image with dependencies
 FROM node:18-alpine AS base
-WORKDIR /app
 
-# Install dependencies needed for building
+# Install dependencies only when needed
 RUN apk add --no-cache libc6-compat
-
-# Stage 2: Install dependencies
-FROM base AS deps
 WORKDIR /app
-
-# Copy package files
-COPY package.json package-lock.json* ./
 
 # Install dependencies based on the preferred package manager
+COPY package.json package-lock.json* ./
 RUN \
   if [ -f package-lock.json ]; then npm ci; \
   else echo "Lockfile not found." && exit 1; \
   fi
 
-# Stage 3: Build the source code
-FROM base AS builder
+# Rebuild the source code only when needed
+FROM node:18-alpine AS builder
 WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-
-# Copy source code
+COPY --from=base /app/node_modules ./node_modules
 COPY . .
 
-# Disable Next.js telemetry during build
+# Next.js collects completely anonymous telemetry data about general usage.
+# Learn more here: https://nextjs.org/telemetry
+# Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# Build the application
 RUN npm run build
 
-# Stage 4: Production image, copy all the files and run next
-FROM base AS runner
+# Production image, copy all the files and run next
+FROM node:18-alpine AS runner
 WORKDIR /app
 
-# Set environment variables
 ENV NODE_ENV production
+# Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# Create system group and user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy public assets
+# You only need to copy next.config.js if you are NOT using the default configuration
+# COPY --from=builder /app/next.config.js ./
 COPY --from=builder /app/public ./public
 
-# Set correct permissions for prerender cache
+# Set the correct permission for prerender cache
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
@@ -61,19 +51,14 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Switch to non-root user
 USER nextjs
 
-# Expose port
 EXPOSE 3000
 
-# Set port environment variable
 ENV PORT 3000
+# set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
-
-# Start the server
+# server.js is created by next build from the standalone output
+# https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]

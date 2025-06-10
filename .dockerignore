@@ -121,3 +121,6 @@ dummy.txt
 dir_structure.txt
 folder-tree-generator.js
 infra-docs.md
+
+# NOTE: Make sure public/ directory is NOT excluded
+# public/ should be included in Docker build context
