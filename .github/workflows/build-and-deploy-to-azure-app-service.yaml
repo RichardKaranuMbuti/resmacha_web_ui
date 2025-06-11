@@ -16,7 +16,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
-      - '.github/workflows/build-frontend.yml'
+      - '.github/workflows/build-and-deploy-to-azure-app-service.yaml'
   workflow_dispatch:
 
 permissions:
