@@ -66,28 +66,42 @@ jobs:
           docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:latest
 
-      # Step 6: Get ACR credentials
-      - name: Get ACR credentials
-        id: acr-creds
+      # Step 6: Get service principal credentials from Azure context
+      - name: Get service principal credentials
+        id: sp-creds
         run: |
-          ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query username -o tsv)
-          ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
-          echo "ACR_USERNAME=$ACR_USERNAME" >> $GITHUB_OUTPUT
-          echo "::add-mask::$ACR_PASSWORD"
-          echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+          # Extract service principal ID from the Azure context
+          SP_ID=$(az account show --query user.name -o tsv)
+          echo "Service Principal ID: $SP_ID"
+          echo "SP_ID=$SP_ID" >> $GITHUB_OUTPUT
 
-      # Step 7: Configure App Service for container deployment
+      # Step 7: Configure App Service for container deployment using service principal
       - name: Configure App Service for Container
         run: |
+          # Use service principal authentication instead of admin credentials
           az webapp config container set \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.APP_NAME }} \
             --docker-custom-image-name ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --docker-registry-server-url https://${{ env.ACR_REGISTRY_URL }} \
-            --docker-registry-server-user ${{ steps.acr-creds.outputs.ACR_USERNAME }} \
-            --docker-registry-server-password ${{ steps.acr-creds.outputs.ACR_PASSWORD }}
+            --docker-registry-server-url https://${{ env.ACR_REGISTRY_URL }}
 
-      # Step 8: Set environment variables
+      # Step 8: Configure container registry authentication using managed identity
+      - name: Configure ACR authentication for App Service
+        run: |
+          # Get the service principal details from the secret
+          CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')
+          
+          # Configure App Service to use service principal for ACR access
+          az webapp config appsettings set \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.APP_NAME }} \
+            --settings \
+              DOCKER_REGISTRY_SERVER_URL=https://${{ env.ACR_REGISTRY_URL }} \
+              DOCKER_REGISTRY_SERVER_USERNAME=$CLIENT_ID \
+              DOCKER_REGISTRY_SERVER_PASSWORD=$CLIENT_SECRET
+
+      # Step 9: Set application environment variables
       - name: Configure App Settings
         run: |
           az webapp config appsettings set \
@@ -102,14 +116,14 @@ jobs:
               NEXT_PUBLIC_APP_NAME="ResMatcha" \
               NEXT_PUBLIC_ENVIRONMENT="${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}"
 
-      # Step 9: Restart the app to pull new container
+      # Step 10: Restart the app to pull new container
       - name: Restart App Service
         run: |
           az webapp restart \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.APP_NAME }}
 
-      # Step 10: Azure logout
+      # Step 11: Azure logout
       - name: Azure logout
         run: az logout
         if: always()
