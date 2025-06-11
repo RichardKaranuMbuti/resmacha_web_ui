@@ -16,7 +16,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
-      - '.github/workflows/build-and-deploy-to-azure-app-service.yaml'
+      - '.github/workflows/build-frontend.yml'
   workflow_dispatch:
 
 permissions:
@@ -45,12 +45,27 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 3: Verify ACR exists and get subscription info
-      - name: Verify ACR and subscription
+      # Step 3: List available subscriptions and switch if needed
+      - name: List subscriptions and find ACR
         run: |
-          echo "Current subscription:"
+          echo "Available subscriptions:"
+          az account list --query "[].{name:name, id:id, isDefault:isDefault}" -o table
+          
+          echo "Searching for ACR across subscriptions..."
+          for sub in $(az account list --query "[].id" -o tsv); do
+            echo "Checking subscription: $sub"
+            az account set --subscription $sub
+            if az acr show --name ${{ env.ACR_NAME }} --query "name" -o tsv 2>/dev/null; then
+              echo "Found ACR in subscription: $sub"
+              echo "Setting this as active subscription"
+              break
+            fi
+          done
+          
+          echo "Current subscription after search:"
           az account show --query "{name:name, id:id}" -o table
-          echo "Checking if ACR exists..."
+          
+          echo "Verifying ACR access:"
           az acr show --name ${{ env.ACR_NAME }} --query "{name:name, resourceGroup:resourceGroup}" -o table
 
       # Step 4: Log in to Azure Container Registry
