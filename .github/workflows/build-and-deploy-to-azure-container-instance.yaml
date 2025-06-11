@@ -1,8 +1,10 @@
-name: Build and Deploy Frontend
+name: Deploy to Azure App Service
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
     paths:
       - 'frontend/**'
       - 'components/**'
@@ -15,125 +17,68 @@ on:
       - 'package-lock.json'
       - 'Dockerfile'
       - '.github/workflows/build-frontend.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'components/**'
-      - 'pages/**'
-      - 'app/**'
-      - 'public/**'
-      - 'styles/**'
-      - 'next.config.js'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'Dockerfile'
   workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
   ACR_NAME: resmatchaacr
+  ACR_REGISTRY_URL: resmatchaacr.azurecr.io
   IMAGE_NAME: resmatcha-frontend
-  AZURE_RESOURCE_GROUP: rg-resmatcha-frontend
-  WEB_APP_NAME: resmatcha-frontend
-  APP_SERVICE_PLAN_NAME: resmatcha-frontend-plan
+  RESOURCE_GROUP: rg-resmatcha-frontend
+  APP_NAME: resmatcha-frontend
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
     
     steps:
+      # Step 1: Checkout source code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Azure CLI
+      # Step 2: Log in to Azure using service principal credentials
+      - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Step 3: Log in to Azure Container Registry
       - name: Log in to Azure Container Registry
         run: |
           az acr login --name ${{ env.ACR_NAME }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-          build-args: |
-            NODE_ENV=production
-            NEXT_TELEMETRY_DISABLED=1
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
-    steps:
-      - name: Log in to Azure CLI
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Get latest image tag
-        id: get-tag
+      # Step 4: Build and push Docker image to ACR
+      - name: Build and Push Docker image to ACR
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "image-tag=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
-          else
-            echo "image-tag=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:develop" >> $GITHUB_OUTPUT
-          fi
+          docker build -t ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Configure App Service to use ACR with Managed Identity
-        run: |
-          # Enable system-assigned managed identity for App Service
-          echo "Enabling managed identity for App Service..."
-          az webapp identity assign \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-          
-          # Get the managed identity principal ID
-          PRINCIPAL_ID=$(az webapp identity show \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --query principalId --output tsv)
-          
-          echo "Granting ACR pull permissions to managed identity..."
-          # Grant the managed identity permission to pull from ACR
-          az role assignment create \
-            --assignee $PRINCIPAL_ID \
-            --scope /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.AZURE_RESOURCE_GROUP }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }} \
-            --role AcrPull || echo "Role assignment may already exist"
+      # Step 5: Deploy to Azure App Service
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.APP_NAME }}
+          images: ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      - name: Set App Service application settings
+      # Step 6: Configure startup command for Next.js (optional)
+      - name: Configure startup command
         run: |
-          echo "Setting application settings..."
+          az webapp config set \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.APP_NAME }} \
+            --startup-file "npm run start"
+
+      # Step 7: Set environment variables
+      - name: Configure App Settings
+        run: |
           az webapp config appsettings set \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.APP_NAME }} \
             --settings \
               NODE_ENV=production \
               NEXT_TELEMETRY_DISABLED=1 \
@@ -141,98 +86,9 @@ jobs:
               WEBSITES_PORT=3000 \
               NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL || 'https://api.resmatcha.com' }}" \
               NEXT_PUBLIC_APP_NAME="ResMatcha" \
-              NEXT_PUBLIC_ENVIRONMENT="${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}" \
-              DOCKER_REGISTRY_SERVER_URL="https://${{ env.ACR_NAME }}.azurecr.io"
+              NEXT_PUBLIC_ENVIRONMENT="${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}"
 
-      - name: Deploy to Azure App Service
-        run: |
-          echo "Deploying image: ${{ steps.get-tag.outputs.image-tag }}"
-          
-          # Update the web app with the new container image
-          az webapp config container set \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --docker-custom-image-name ${{ steps.get-tag.outputs.image-tag }} \
-            --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io
-
-      - name: Restart App Service
-        run: |
-          echo "Restarting App Service to apply changes..."
-          az webapp restart \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-
-      - name: Get App Service URL
-        id: get-url
-        run: |
-          APP_URL="https://${{ env.WEB_APP_NAME }}.azurewebsites.net"
-          echo "app-url=$APP_URL" >> $GITHUB_OUTPUT
-          echo "### 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "Application URL: $APP_URL" >> $GITHUB_STEP_SUMMARY
-
-      - name: Health Check
-        run: |
-          echo "Waiting for deployment to be ready..."
-          sleep 90  # Give more time for container to start
-          
-          # Simple health check with retries
-          MAX_RETRIES=5
-          RETRY_COUNT=0
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.get-url.outputs.app-url }} || echo "000")
-            
-            if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 404 ]; then
-              echo "✅ Application is responding (HTTP $HTTP_STATUS)"
-              echo "### ✅ Health Check Passed" >> $GITHUB_STEP_SUMMARY
-              echo "HTTP Status: $HTTP_STATUS" >> $GITHUB_STEP_SUMMARY
-              break
-            else
-              echo "⚠️ Attempt $((RETRY_COUNT + 1)): Application not ready (HTTP $HTTP_STATUS)"
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                sleep 30
-              fi
-            fi
-          done
-          
-          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-            echo "⚠️ Application health check inconclusive after $MAX_RETRIES attempts"
-            echo "### ⚠️ Health Check Inconclusive" >> $GITHUB_STEP_SUMMARY
-            echo "Final HTTP Status: $HTTP_STATUS" >> $GITHUB_STEP_SUMMARY
-            echo "Please check the application manually: ${{ steps.get-url.outputs.app-url }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Get App Service logs (if deployment seems to fail)
-        if: failure()
-        run: |
-          echo "Fetching recent App Service logs..."
-          az webapp log tail \
-            --name ${{ env.WEB_APP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --timeout 60 || echo "Could not fetch logs"
-
+      # Step 8: Azure logout
       - name: Azure logout
-        run: |
-          az logout
+        run: az logout
         if: always()
-
-  # Security scanning job (optional but recommended)
-  security-scan:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
-    steps:
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ needs.build-and-push.outputs.image-tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
