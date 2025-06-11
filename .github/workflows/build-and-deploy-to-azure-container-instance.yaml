@@ -16,7 +16,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
-      - '.github/workflows/build-and-deploy-to-azure-container-instance.yaml'
+      - '.github/workflows/build-frontend.yml'
   workflow_dispatch:
 
 permissions:
@@ -45,12 +45,20 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 3: Log in to Azure Container Registry
+      # Step 3: Verify ACR exists and get subscription info
+      - name: Verify ACR and subscription
+        run: |
+          echo "Current subscription:"
+          az account show --query "{name:name, id:id}" -o table
+          echo "Checking if ACR exists..."
+          az acr show --name ${{ env.ACR_NAME }} --query "{name:name, resourceGroup:resourceGroup}" -o table
+
+      # Step 4: Log in to Azure Container Registry
       - name: Log in to Azure Container Registry
         run: |
           az acr login --name ${{ env.ACR_NAME }}
 
-      # Step 4: Build and push Docker image to ACR
+      # Step 5: Build and push Docker image to ACR
       - name: Build and Push Docker image to ACR
         run: |
           docker build -t ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
@@ -58,7 +66,17 @@ jobs:
           docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:latest
 
-      # Step 5: Configure App Service for container deployment
+      # Step 6: Get ACR credentials
+      - name: Get ACR credentials
+        id: acr-creds
+        run: |
+          ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
+          echo "ACR_USERNAME=$ACR_USERNAME" >> $GITHUB_OUTPUT
+          echo "::add-mask::$ACR_PASSWORD"
+          echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+
+      # Step 7: Configure App Service for container deployment
       - name: Configure App Service for Container
         run: |
           az webapp config container set \
@@ -66,10 +84,10 @@ jobs:
             --name ${{ env.APP_NAME }} \
             --docker-custom-image-name ${{ env.ACR_REGISTRY_URL }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --docker-registry-server-url https://${{ env.ACR_REGISTRY_URL }} \
-            --docker-registry-server-user ${{ env.ACR_NAME }} \
-            --docker-registry-server-password $(az acr credential show --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
+            --docker-registry-server-user ${{ steps.acr-creds.outputs.ACR_USERNAME }} \
+            --docker-registry-server-password ${{ steps.acr-creds.outputs.ACR_PASSWORD }}
 
-      # Step 6: Set environment variables
+      # Step 8: Set environment variables
       - name: Configure App Settings
         run: |
           az webapp config appsettings set \
@@ -84,14 +102,14 @@ jobs:
               NEXT_PUBLIC_APP_NAME="ResMatcha" \
               NEXT_PUBLIC_ENVIRONMENT="${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}"
 
-      # Step 7: Restart the app to pull new container
+      # Step 9: Restart the app to pull new container
       - name: Restart App Service
         run: |
           az webapp restart \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.APP_NAME }}
 
-      # Step 8: Azure logout
+      # Step 10: Azure logout
       - name: Azure logout
         run: az logout
         if: always()
