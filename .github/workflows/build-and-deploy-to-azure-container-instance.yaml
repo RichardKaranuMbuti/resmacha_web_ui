@@ -28,6 +28,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
+  workflow_dispatch:
 
 env:
   ACR_NAME: resmatchaacr
