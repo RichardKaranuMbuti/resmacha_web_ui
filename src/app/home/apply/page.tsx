@@ -160,7 +160,7 @@ export default function ApplyPage() {
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
                     placeholder="e.g., Software Developer, Product Manager, Data Scientist"
-                    className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full pl-12 pr-4 py-4 text-lg text-gray-900 placeholder-gray-500 bg-white border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:outline-none transition-colors"
                     disabled={isLoading}
                   />
                 </div>
@@ -179,7 +179,7 @@ export default function ApplyPage() {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g., San Francisco, Remote, New York"
-                    className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full pl-12 pr-4 py-4 text-lg text-gray-900 placeholder-gray-500 bg-white border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:outline-none transition-colors"
                     disabled={isLoading}
                   />
                 </div>

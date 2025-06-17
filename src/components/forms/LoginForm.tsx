@@ -229,6 +229,7 @@ export const LoginForm: React.FC = () => {
             </div>
 
             {/* Remember Me & Forgot Password */}
+            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
@@ -238,9 +239,9 @@ export const LoginForm: React.FC = () => {
                   checked={rememberMe}
                   onChange={handleRememberMeChange}
                   disabled={isFormDisabled}
-                  className="h-4 w-4 text-plum focus:ring-plum border-gray-300 rounded disabled:opacity-50"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 font-medium">
                   Remember me
                 </label>
               </div>
@@ -249,7 +250,7 @@ export const LoginForm: React.FC = () => {
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={isFormDisabled}
-                className="text-sm font-medium text-plum hover:text-plum-dark transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed underline"
               >
                 Forgot password?
               </button>
@@ -263,6 +264,7 @@ export const LoginForm: React.FC = () => {
               loadingText="Signing In..."
               disabled={isFormDisabled}
               size="lg"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg border-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Sign In
             </Button>
@@ -273,7 +275,7 @@ export const LoginForm: React.FC = () => {
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or</span>
+                <span className="px-2 bg-white text-gray-600 font-medium">Or</span>
               </div>
             </div>
 
@@ -285,6 +287,7 @@ export const LoginForm: React.FC = () => {
                 variant="outline"
                 fullWidth
                 disabled={isFormDisabled}
+                className="border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-900 font-bold py-3 px-4 rounded-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 leftIcon={
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -300,11 +303,11 @@ export const LoginForm: React.FC = () => {
 
             {/* Signup Link */}
             <div className="text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-700">
                 Don&apos;t have an account?{' '}
                 <a
                   href="/signup"
-                  className="font-medium text-plum hover:text-plum-dark transition-colors duration-200"
+                  className="font-bold text-gray-900 hover:text-blue-600 transition-colors duration-200 underline"
                 >
                   Sign up here
                 </a>
