@@ -1,19 +1,36 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { API_BASE_URLS, API_ENDPOINTS, REQUEST_TIMEOUT } from '../constants/api';
-import { storageUtils } from '../utils/storage';
 
-// Define types for better type safety
-interface AuthTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
+// Cookie utilities for client-side
+const cookieUtils = {
+  getCookie: (name: string): string | null => {
+    if (typeof document === 'undefined') return null;
+    
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+  },
 
-interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
-  _retry?: boolean;
-}
+  setCookie: (name: string, value: string, days: number = 7) => {
+    if (typeof document === 'undefined') return;
+    
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;secure;samesite=strict`;
+  },
 
-// Create axios instance for auth API
+  deleteCookie: (name: string) => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+  }
+};
+
+// Create axios instances
 export const authAxios: AxiosInstance = axios.create({
   baseURL: API_BASE_URLS.USER,
   timeout: REQUEST_TIMEOUT,
@@ -23,9 +40,17 @@ export const authAxios: AxiosInstance = axios.create({
   },
 });
 
-// Create general API instance (for other endpoints)
 export const apiAxios: AxiosInstance = axios.create({
   baseURL: API_BASE_URLS.USER,
+  timeout: REQUEST_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
+
+export const matchingAxios: AxiosInstance = axios.create({
+  baseURL: API_BASE_URLS.MATCHING,
   timeout: REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
@@ -41,26 +66,41 @@ export const setTokens = (access: string, refresh: string): void => {
   accessToken = access;
   refreshToken = refresh;
   
-  // Set default authorization header for both instances
+  // Set cookies for middleware
+  cookieUtils.setCookie('access_token', access, 7);
+  cookieUtils.setCookie('refresh_token', refresh, 30);
+  
+  // Set default authorization header for ALL instances
   authAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
   apiAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+  matchingAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
 };
 
 export const clearTokens = (): void => {
   accessToken = null;
   refreshToken = null;
   
-  // Remove authorization headers
+  // Clear cookies
+  cookieUtils.deleteCookie('access_token');
+  cookieUtils.deleteCookie('refresh_token');
+  
+  // Remove authorization headers from ALL instances
   delete authAxios.defaults.headers.common['Authorization'];
   delete apiAxios.defaults.headers.common['Authorization'];
+  delete matchingAxios.defaults.headers.common['Authorization'];
 };
 
-export const getAccessToken = (): string | null => accessToken;
-export const getRefreshToken = (): string | null => refreshToken;
+export const getAccessToken = (): string | null => {
+  return accessToken || cookieUtils.getCookie('access_token');
+};
+
+export const getRefreshToken = (): string | null => {
+  return refreshToken || cookieUtils.getCookie('refresh_token');
+};
 
 // Request interceptor to add auth token
 const requestInterceptor = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-  const token = storageUtils.getAccessToken();
+  const token = getAccessToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -73,28 +113,26 @@ const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
 };
 
 const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
-  const originalRequest = error.config as ExtendedAxiosRequestConfig;
+  const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
   // If the error is 401 and we haven't already tried to refresh
   if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
     originalRequest._retry = true;
 
     try {
-      const currentRefreshToken = storageUtils.getRefreshToken();
+      const currentRefreshToken = getRefreshToken();
       if (!currentRefreshToken) {
         throw new Error('No refresh token available');
       }
 
-      // FIXED: Use consistent endpoint from constants
-      const response = await authAxios.post<AuthTokenResponse>(API_ENDPOINTS.AUTH.REFRESH, {
+      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
         refresh_token: currentRefreshToken
       });
 
-      const { access_token, refresh_token: newRefreshToken, expires_in } = response.data;
+      const { access_token, refresh_token: newRefreshToken } = response.data;
       
-      // Update tokens
+      // Update tokens (this will also update cookies)
       setTokens(access_token, newRefreshToken);
-      storageUtils.setTokens(access_token, newRefreshToken, expires_in);
 
       // Retry the original request with new token
       originalRequest.headers = originalRequest.headers || {};
@@ -102,10 +140,12 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
       return axios(originalRequest);
 
     } catch (refreshError) {
+      console.error('🚨 Token refresh failed, forcing logout');
+      
       // Refresh failed, clear tokens and redirect to login
       clearTokens();
-      storageUtils.clearAuthData();
       
+      // Force redirect to login - middleware will handle the redirect
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
@@ -117,19 +157,25 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
   return Promise.reject(error);
 };
 
-// Add interceptors to both instances
-[authAxios, apiAxios].forEach(instance => {
+// Add interceptors to ALL instances
+[authAxios, apiAxios, matchingAxios].forEach(instance => {
   instance.interceptors.request.use(requestInterceptor);
   instance.interceptors.response.use(responseInterceptor, errorInterceptor);
 });
 
-// Initialize tokens from storage
+// Initialize tokens from cookies on load
 const initializeTokens = (): void => {
-  const storedAccessToken = storageUtils.getAccessToken();
-  const storedRefreshToken = storageUtils.getRefreshToken();
+  const storedAccessToken = cookieUtils.getCookie('access_token');
+  const storedRefreshToken = cookieUtils.getCookie('refresh_token');
   
   if (storedAccessToken && storedRefreshToken) {
-    setTokens(storedAccessToken, storedRefreshToken);
+    accessToken = storedAccessToken;
+    refreshToken = storedRefreshToken;
+    
+    // Set headers
+    authAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
+    apiAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
+    matchingAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
   }
 };
 

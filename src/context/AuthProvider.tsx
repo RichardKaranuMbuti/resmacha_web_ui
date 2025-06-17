@@ -1,3 +1,4 @@
+// src/context/AuthProvider.tsx
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authAxios, clearTokens, setTokens } from '../config/axiosConfig';
@@ -53,11 +54,31 @@ interface AxiosError {
   };
   request?: unknown;
   message: string;
+  config?: {
+    url?: string;
+  };
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const logout = useCallback((): void => {
+    try {
+      // Optionally call logout endpoint
+      // authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
+    } catch (error) {
+      console.error('Logout API call failed:', error);
+    } finally {
+      clearTokens();
+      storageUtils.clearAuthData();
+      setUser(null);
+      
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+  }, []);
 
   // Initialize auth state from storage
   useEffect(() => {
@@ -94,22 +115,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const logout = useCallback((): void => {
-    try {
-      // Optionally call logout endpoint
-      // authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
-    } catch (error) {
-      console.error('Logout API call failed:', error);
-    } finally {
-      clearTokens();
-      storageUtils.clearAuthData();
-      setUser(null);
-      
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+  // Add global axios response interceptor that calls logout on 401
+  useEffect(() => {
+    const interceptorId = authAxios.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        // If we get a 401 and it's not a login/register request
+        if (error.response?.status === 401 && 
+            !error.config?.url?.includes('/login') && 
+            !error.config?.url?.includes('/register')) {
+          console.log('🚨 401 detected in AuthProvider, logging out...');
+          logout();
+        }
+        return Promise.reject(error);
       }
+    );
+
+    return () => {
+      authAxios.interceptors.response.eject(interceptorId);
+    };
+  }, [logout]);
+
+  // Add event listener to handle auth:logout event from axios interceptor
+  useEffect(() => {
+    const handleAuthLogout = () => {
+      console.log('🚨 Received auth:logout event');
+      logout();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:logout', handleAuthLogout);
+      
+      return () => {
+        window.removeEventListener('auth:logout', handleAuthLogout);
+      };
     }
-  }, []);
+  }, [logout]);
 
   const refreshToken = useCallback(async (): Promise<void> => {
     try {

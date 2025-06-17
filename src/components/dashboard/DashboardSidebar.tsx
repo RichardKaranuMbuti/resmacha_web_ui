@@ -63,6 +63,14 @@ export default function DashboardSidebar({
       badgeColor: 'purple'
     },
     { 
+      id: 'resumes', 
+      label: 'My Resumes', 
+      icon: Star, 
+      href: '/resumes', 
+      badge: '23',
+      badgeColor: 'purple'
+    },
+    { 
       id: 'applications', 
       label: 'Applications', 
       icon: FileText, 

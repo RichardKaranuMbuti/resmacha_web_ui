@@ -64,7 +64,16 @@ export const API_ENDPOINTS = {
   // Resume endpoints (handled by matching service)
   RESUME: {
     UPLOAD: '/api/v1/resumes/upload',
-    GET: '/api/v1/resumes',
+    LIST: '/api/v1/resumes/',
+    LATEST: '/api/v1/resumes/latest',
+    GET_BY_ID: '/api/v1/resumes', // + /{resume_id}
+    UPDATE: '/api/v1/resumes', // + /{resume_id}
+    DELETE: '/api/v1/resumes', // + /{resume_id}
+    GET_CONTENT: '/api/v1/resumes', // + /{resume_id}/content
+    REFRESH_TEXT: '/api/v1/resumes', // + /{resume_id}/refresh-text
+    // Legacy endpoints (deprecated but included for completeness)
+    LEGACY_PATH: '/api/v1/resumes', // + /{user_id}/path
+    LEGACY_CONTENT: '/api/v1/resumes', // + /{user_id}/content
   },
 
   // Health endpoints
