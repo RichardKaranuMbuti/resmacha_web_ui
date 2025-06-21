@@ -53,12 +53,18 @@ export const API_ENDPOINTS = {
   // Scraping endpoints  
   SCRAPING: {
     LINKEDIN_JOB: '/api/v1/scraping/linkedin/jobs/scrape',
+    SCRAPE_STATUS: '/api/v1/scraping/linkedin/jobs/status',
+    RECENT_SCRAPS: '/api/v1/scraping/linkedin/scraps/recent',
+    SCRAP_SUMMARY: '/api/v1/scraping/linkedin/scraps/summary',
+
   },
   
   // Matching endpoints
   MATCHING: {
     JOB_MATCH: '/api/v1/matching/match',
     JOB_MATCH_RESULT: '/api/v1/matching/results',
+    CHECK_USER_ONGOING_MATCHING:' /api/v1/matching/processing-status/ongoing',
+    CHECK_USER_ONGOING_MATCHING_DETAILS: '/api/v1/matching/processing-status/ongoing/details',
   },
 
   // Resume endpoints (handled by matching service)

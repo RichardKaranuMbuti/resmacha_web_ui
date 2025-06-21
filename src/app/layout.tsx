@@ -1,6 +1,8 @@
 // app/layout.tsx
 
 import { AuthProvider } from '@src/context/AuthProvider';
+import { ScrapingProvider } from '@src/context/ScrapingContext';
+import { MatchingProvider } from '@src/context/MatchingContext';
 import "@src/styles/globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -58,7 +60,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          {children}
+          <ScrapingProvider>
+            <MatchingProvider>
+              {children}
+            </MatchingProvider>
+          </ScrapingProvider>
         </AuthProvider>
       </body>
     </html>
