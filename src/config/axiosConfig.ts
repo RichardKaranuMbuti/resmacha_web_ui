@@ -1,35 +1,8 @@
-//src/config/axiosConfig.ts
+//src/config/axiosConfig.ts - Fixed version
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { API_BASE_URLS, API_ENDPOINTS, REQUEST_TIMEOUT } from '../constants/api';
 
-// Cookie utilities for client-side
-const cookieUtils = {
-  getCookie: (name: string): string | null => {
-    if (typeof document === 'undefined') return null;
-    
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-    }
-    return null;
-  },
-
-  setCookie: (name: string, value: string, days: number = 7) => {
-    if (typeof document === 'undefined') return;
-    
-    const expires = new Date();
-    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
-    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;secure;samesite=strict`;
-  },
-
-  deleteCookie: (name: string) => {
-    if (typeof document === 'undefined') return;
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
-  }
-};
+// REMOVED: Client-side cookie utilities - we'll use HTTP-only cookies set by the server
 
 // Create axios instances
 export const authAxios: AxiosInstance = axios.create({
@@ -39,6 +12,7 @@ export const authAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 export const apiAxios: AxiosInstance = axios.create({
@@ -48,6 +22,7 @@ export const apiAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 export const matchingAxios: AxiosInstance = axios.create({
@@ -57,27 +32,26 @@ export const matchingAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 // Define types for the failed queue
 interface QueuedRequest {
-  resolve: (value: string | null) => void;
+  resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 }
 
-// Token management
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
+// SIMPLIFIED: Remove client-side token management
 let isRefreshing = false;
 let failedQueue: QueuedRequest[] = [];
 
 // Process failed requests queue
-const processQueue = (error: Error | null, token: string | null = null) => {
+const processQueue = (error: Error | null) => {
   failedQueue.forEach(({ resolve, reject }) => {
     if (error) {
       reject(error);
     } else {
-      resolve(token);
+      resolve(null);
     }
   });
   
@@ -92,50 +66,11 @@ const emitLogoutEvent = () => {
   }
 };
 
-export const setTokens = (access: string, refresh: string): void => {
-  accessToken = access;
-  refreshToken = refresh;
-  
-  // Set cookies for middleware
-  cookieUtils.setCookie('access_token', access, 7);
-  cookieUtils.setCookie('refresh_token', refresh, 30);
-  
-  // Set default authorization header for ALL instances
-  authAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-  apiAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-  matchingAxios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-};
+// REMOVED: setTokens, clearTokens, getAccessToken, getRefreshToken
+// Tokens are now managed server-side via HTTP-only cookies
 
-export const clearTokens = (): void => {
-  accessToken = null;
-  refreshToken = null;
-  
-  // Clear cookies
-  cookieUtils.deleteCookie('access_token');
-  cookieUtils.deleteCookie('refresh_token');
-  
-  // Remove authorization headers from ALL instances
-  delete authAxios.defaults.headers.common['Authorization'];
-  delete apiAxios.defaults.headers.common['Authorization'];
-  delete matchingAxios.defaults.headers.common['Authorization'];
-};
-
-export const getAccessToken = (): string | null => {
-  return accessToken || cookieUtils.getCookie('access_token');
-};
-
-export const getRefreshToken = (): string | null => {
-  return refreshToken || cookieUtils.getCookie('refresh_token');
-};
-
-// Request interceptor to add auth token
-const requestInterceptor = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-  const token = getAccessToken();
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-};
+// REMOVED: Request interceptor - no need to manually add auth headers
+// Cookies are automatically sent with withCredentials: true
 
 // Response interceptor for token refresh
 const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
@@ -162,12 +97,9 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
 
     // If we're already refreshing, queue this request
     if (isRefreshing) {
-      return new Promise<string | null>((resolve, reject) => {
+      return new Promise<unknown>((resolve, reject) => {
         failedQueue.push({ resolve, reject });
-      }).then(token => {
-        if (originalRequest.headers && token) {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-        }
+      }).then(() => {
         return axios(originalRequest);
       }).catch(err => {
         return Promise.reject(err);
@@ -178,49 +110,27 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
     isRefreshing = true;
 
     try {
-      const currentRefreshToken = getRefreshToken();
-      if (!currentRefreshToken) {
-        throw new Error('No refresh token available');
-      }
-
       console.log('🔄 Attempting token refresh...');
       
-      // Create a new axios instance to avoid interceptor loops
-      const refreshAxios = axios.create({
-        baseURL: API_BASE_URLS.USER,
-        timeout: REQUEST_TIMEOUT,
-      });
+      // FIXED: Use the same axios instance to maintain cookie behavior
+      await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {});
 
-      const response = await refreshAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
-        refresh_token: currentRefreshToken
-      });
-
-      const { access_token, refresh_token: newRefreshToken } = response.data;
-      
       console.log('✅ Token refresh successful');
       
-      // Update tokens (this will also update cookies)
-      setTokens(access_token, newRefreshToken);
-      
-      // Process the queue with the new token
-      processQueue(null, access_token);
+      // Process the queue - tokens are automatically updated via cookies
+      processQueue(null);
 
-      // Retry the original request with new token
-      if (originalRequest.headers) {
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-      }
-      
+      // Retry the original request
       return axios(originalRequest);
 
     } catch (refreshError) {
       console.error('🚨 Token refresh failed:', refreshError);
       
       // Process the queue with error
-      const error = refreshError instanceof Error ? refreshError : new Error('Token refresh failed');
-      processQueue(error, null);
+      const errorObj = refreshError instanceof Error ? refreshError : new Error('Token refresh failed');
+      processQueue(errorObj);
       
-      // Clear tokens and emit logout event
-      clearTokens();
+      // Emit logout event - server will clear cookies
       emitLogoutEvent();
       
       return Promise.reject(refreshError);
@@ -234,28 +144,5 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
 
 // Add interceptors to instances that need authentication
 [apiAxios, matchingAxios].forEach(instance => {
-  instance.interceptors.request.use(requestInterceptor);
   instance.interceptors.response.use(responseInterceptor, errorInterceptor);
 });
-
-// Don't add interceptors to authAxios to avoid loops during auth operations
-authAxios.interceptors.request.use(requestInterceptor);
-
-// Initialize tokens from cookies on load
-const initializeTokens = (): void => {
-  const storedAccessToken = cookieUtils.getCookie('access_token');
-  const storedRefreshToken = cookieUtils.getCookie('refresh_token');
-  
-  if (storedAccessToken && storedRefreshToken) {
-    accessToken = storedAccessToken;
-    refreshToken = storedRefreshToken;
-    
-    // Set headers
-    authAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
-    apiAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
-    matchingAxios.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
-  }
-};
-
-// Initialize on module load
-initializeTokens();

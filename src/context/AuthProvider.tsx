@@ -1,7 +1,7 @@
-// src/context/AuthProvider.tsx
+// src/context/AuthProvider.tsx - Fixed version
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { authAxios, clearTokens, setTokens } from '../config/axiosConfig';
+import { authAxios } from '../config/axiosConfig';
 import { API_ENDPOINTS } from '../constants/api';
 import type {
   ApiError,
@@ -29,17 +29,6 @@ interface AuthProviderProps {
 }
 
 // Define interfaces for better type safety
-interface TokenPayload {
-  sub: string;
-  email?: string;
-  username?: string;
-  first_name?: string;
-  last_name?: string;
-  is_active?: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
-
 interface ErrorResponse {
   message?: string;
   code?: string;
@@ -67,12 +56,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🚪 Logging out user...');
     
     try {
-      // Optionally call logout endpoint
-      // authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
-    } catch (error) {
-      console.error('Logout API call failed:', error);
+      // Call logout endpoint to clear HTTP-only cookies
+      authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
+    } catch (logoutError) {
+      console.error('Logout API call failed:', logoutError);
     } finally {
-      clearTokens();
+      // Clear local storage only
       storageUtils.clearAuthData();
       setUser(null);
       
@@ -89,34 +78,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize auth state from storage
+  // Initialize auth state from storage and verify with server
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const storedUserData = storageUtils.getUserData();
-        const accessToken = storageUtils.getAccessToken();
-
-        const isValidUser = (data: unknown): data is User => {
-          return data !== null && 
-            typeof data === 'object' &&
-            data !== undefined &&
-            'id' in data &&
-            'email' in data &&
-            'username' in data &&
-            typeof (data as User).id === 'number' && 
-            typeof (data as User).email === 'string' &&
-            typeof (data as User).username === 'string';
-        };
-
-        if (isValidUser(storedUserData) && accessToken) {
-          setUser(storedUserData);
-          console.log('✅ User initialized from storage');
-        } else if (storedUserData) {
-          console.log('❌ Invalid user data in storage, clearing...');
-          storageUtils.clearAuthData();
+        // Try to get user data from server (this will use HTTP-only cookies)
+        const response = await authAxios.get('/auth/me');
+        
+        if (response.data) {
+          const userData: User = response.data;
+          setUser(userData);
+          
+          // Store user data in localStorage for UI purposes only
+          const userDataForStorage = {
+            ...userData,
+            id: userData.id.toString(),
+            name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
+          };
+          storageUtils.setUserData(userDataForStorage);
+          
+          console.log('✅ User initialized from server');
         }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
+      } catch {
+        console.log('❌ No valid session found');
+        // Clear any stale local data
         storageUtils.clearAuthData();
       } finally {
         setIsLoading(false);
@@ -158,65 +143,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ Login API response received');
 
-      const { access_token, refresh_token } = response.data;
-
-      // Store tokens securely
-      setTokens(access_token, refresh_token);
-      storageUtils.setTokens(access_token, refresh_token, response.data.expires_in);
-
-      // Decode JWT token to get user info
-      try {
-        const tokenParts = access_token.split('.');
-        if (tokenParts.length === 3) {
-          const payload: TokenPayload = JSON.parse(atob(tokenParts[1]));
-          
-          const userData: User = {
-            id: parseInt(payload.sub),
-            email: payload.email || credentials.email,
-            username: payload.username || '',
-            first_name: payload.first_name || '',
-            last_name: payload.last_name || '',
-            is_active: payload.is_active !== false,
-            auth_provider: 'local',
-            created_at: payload.created_at || new Date().toISOString(),
-            updated_at: payload.updated_at || new Date().toISOString()
-          };
-
-          const userDataForStorage = {
-            ...userData,
-            id: userData.id.toString(),
-            name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
-          };
-
-          storageUtils.setUserData(userDataForStorage);
-          setUser(userData);
-          
-          console.log('✅ User data set successfully');
-        }
-      } catch (tokenError) {
-        console.error('Error decoding token:', tokenError);
-        // Fallback user object
-        const userData: User = {
-          id: Date.now(),
-          email: credentials.email,
-          username: '',
-          first_name: '',
-          last_name: '',
-          is_active: true,
-          auth_provider: 'local',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const userDataForStorage = {
-          ...userData,
-          id: userData.id.toString(),
-          name: userData.email
-        };
-
-        storageUtils.setUserData(userDataForStorage);
-        setUser(userData);
+      // FIXED: No need to manually handle tokens - server sets HTTP-only cookies
+      // Get user data from the response or make a separate call
+      let userData: User;
+      
+      if (response.data.user) {
+        userData = response.data.user;
+      } else {
+        // If user data not in login response, fetch it
+        const userResponse = await authAxios.get('/auth/me');
+        userData = userResponse.data;
       }
+
+      // Store user data in localStorage for UI purposes only
+      const userDataForStorage = {
+        ...userData,
+        id: userData.id.toString(),
+        name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
+      };
+
+      storageUtils.setUserData(userDataForStorage);
+      setUser(userData);
+      
+      console.log('✅ User data set successfully');
       
     } catch (error) {
       console.error('❌ Login error:', error);
@@ -356,11 +305,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [login]);
 
-  // Simplified refresh token function - mainly for manual calls
+  // Simplified refresh token function
   const refreshToken = useCallback(async (): Promise<void> => {
-    // The actual token refresh is now handled by axios interceptors
-    // This is kept for API compatibility
     console.log('🔄 Manual token refresh requested');
+    try {
+      await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {});
+      console.log('✅ Manual token refresh successful');
+    } catch (error) {
+      console.error('❌ Manual token refresh failed:', error);
+      throw error;
+    }
   }, []);
 
   const value: AuthContextType = {

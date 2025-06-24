@@ -1,5 +1,4 @@
 // src/types/auth.ts
-
 export interface User {
   id: number;
   email: string;
@@ -25,11 +24,13 @@ export interface RegisterRequest {
   password: string;
 }
 
+// UPDATED: Added user property to LoginResponse
 export interface LoginResponse {
   access_token: string;
   token_type: 'bearer';
   refresh_token: string;
   expires_in: number;
+  user: User; // Added this property
 }
 
 // Fix for empty interface - use type alias instead
