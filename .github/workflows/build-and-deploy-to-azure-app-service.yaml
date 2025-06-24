@@ -5,18 +5,18 @@ on:
     branches:
       - main
       - develop
-    paths:
-      - 'frontend/**'
-      - 'components/**'
-      - 'pages/**'
-      - 'app/**'
-      - 'public/**'
-      - 'styles/**'
-      - 'next.config.js'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'Dockerfile'
-      - '.github/workflows/build-and-deploy-to-azure-app-service.yaml'
+    # paths:
+    #   - 'frontend/**'
+    #   - 'components/**'
+    #   - 'pages/**'
+    #   - 'app/**'
+    #   - 'public/**'
+    #   - 'styles/**'
+    #   - 'next.config.js'
+    #   - 'package.json'
+    #   - 'package-lock.json'
+    #   - 'Dockerfile'
+    #   - '.github/workflows/build-and-deploy-to-azure-app-service.yaml'
   workflow_dispatch:
 
 permissions:

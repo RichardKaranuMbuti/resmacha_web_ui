@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 
 interface ScrapingJob {
   scraping_job_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'queued' | 'processing' | 'processing_details' | 'cards_completed' | 'updating_database' | 'completed' | 'failed' | 'cancelled' | 'retry' | 'dead_letter';
   job_title: string;
   location: string;
   created_at: string;
@@ -55,11 +55,14 @@ interface ScrapingContextType {
   initiateScraping: (jobTitle: string, location: string) => Promise<string>;
   clearCurrentJob: () => void;
   refreshData: () => Promise<void>;
+  navigateToResults: () => void;
+  stayOnApplyPage: () => void;
 }
 
 const ScrapingContext = createContext<ScrapingContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'scraping_job_id';
+const LAST_KNOWN_STATUS_KEY = 'last_known_status';
 
 // Helper function to get auth token
 const getAuthToken = () => {
@@ -87,6 +90,30 @@ const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) 
   });
 };
 
+// Helper function to determine if status transition is valid
+const isValidStatusTransition = (currentStatus: string, newStatus: string): boolean => {
+  const statusOrder = [
+    'pending', 'queued', 'processing', 'processing_details', 
+    'cards_completed', 'updating_database', 'completed'
+  ];
+  
+  // Allow same status (no change)
+  if (currentStatus === newStatus) return true;
+  
+  // Allow failure, cancellation, retry, or dead_letter from any status
+  if (['failed', 'cancelled', 'retry', 'dead_letter'].includes(newStatus)) return true;
+  
+  // Allow forward progression in the normal flow
+  const currentIndex = statusOrder.indexOf(currentStatus);
+  const newIndex = statusOrder.indexOf(newStatus);
+  
+  if (currentIndex >= 0 && newIndex >= 0) {
+    return newIndex > currentIndex;
+  }
+  
+  return false;
+};
+
 export function ScrapingProvider({ children }: { children: ReactNode }) {
   const [currentJob, setCurrentJob] = useState<ScrapingJob | null>(null);
   const [recentScraps, setRecentScraps] = useState<RecentScrap[]>([]);
@@ -94,7 +121,11 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const hasActiveJob = currentJob?.status === 'pending' || currentJob?.status === 'processing';
+  // Determine if job is still active (should keep polling)
+  const hasActiveJob = currentJob && [
+    'pending', 'queued', 'processing', 'processing_details', 
+    'cards_completed', 'updating_database', 'retry'
+  ].includes(currentJob.status);
 
   const checkScrapingStatus = useCallback(async () => {
     const storedJobId = localStorage.getItem(STORAGE_KEY);
@@ -107,17 +138,25 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        setCurrentJob(data);
+        const lastKnownStatus = localStorage.getItem(LAST_KNOWN_STATUS_KEY);
         
-        // If job is completed or failed, keep it visible for user to see results
-        // Don't auto-clear immediately - let user interact with it
-        if (data.status === 'completed' || data.status === 'failed') {
-          // Stop polling by not setting up new intervals
-          // The job will be cleared when user clicks "View Results" or manually cleared
+        // Check for invalid status transitions
+        if (lastKnownStatus && !isValidStatusTransition(lastKnownStatus, data.status)) {
+          console.warn(`Invalid status transition: ${lastKnownStatus} -> ${data.status}`);
+          setError('Something unexpected happened with your job. You can start a new search.');
+          return;
         }
+        
+        setCurrentJob(data);
+        localStorage.setItem(LAST_KNOWN_STATUS_KEY, data.status);
+        
+        // Clear any previous errors
+        setError(null);
+        
       } else if (response.status === 404) {
-        // Job not found, clear stored ID
+        // Job not found, clear stored data
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
         setCurrentJob(null);
       } else {
         throw new Error(`Failed to check status: ${response.status}`);
@@ -125,9 +164,11 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error checking scraping status:', err);
       setError('Failed to check job status. Please try refreshing.');
+      
       // Only clear on specific errors, not network issues
       if (err instanceof Error && err.message.includes('404')) {
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
         setCurrentJob(null);
       }
     }
@@ -200,13 +241,14 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       
-      // Store the job ID
+      // Store the job ID and initial status
       localStorage.setItem(STORAGE_KEY, data.scraping_job_id);
+      localStorage.setItem(LAST_KNOWN_STATUS_KEY, 'pending');
       
       // Update current job state
       setCurrentJob({
         scraping_job_id: data.scraping_job_id,
-        status: 'processing',
+        status: 'pending',
         job_title: jobTitle,
         location: location,
         created_at: new Date().toISOString(),
@@ -223,8 +265,20 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
   const clearCurrentJob = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
     setCurrentJob(null);
   }, []);
+
+  const navigateToResults = useCallback(() => {
+    clearCurrentJob();
+    window.location.href = '/home/results';
+  }, [clearCurrentJob]);
+
+  const stayOnApplyPage = useCallback(() => {
+    clearCurrentJob();
+    // Refresh the data to show the dashboard
+    refreshData();
+  }, [clearCurrentJob, refreshData]);
 
   // Initial data load
   useEffect(() => {
@@ -233,19 +287,14 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
   // Poll for status updates when there's an active job
   useEffect(() => {
-    if (!currentJob) return;
-    
-    // Only poll if job is still pending or processing
-    if (currentJob.status !== 'pending' && currentJob.status !== 'processing') {
-      return; // Stop polling when job is completed or failed
-    }
+    if (!hasActiveJob) return;
 
     const interval = setInterval(() => {
       checkScrapingStatus();
-    }, 4000); // Check every 4 seconds for faster detection
+    }, 8000); // Check every 8 seconds
 
     return () => clearInterval(interval);
-  }, [currentJob?.status, currentJob?.scraping_job_id, checkScrapingStatus]);
+  }, [hasActiveJob, checkScrapingStatus]);
 
   // Check for existing job on mount
   useEffect(() => {
@@ -261,11 +310,13 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
     summary,
     isLoading,
     error,
-    hasActiveJob,
+    hasActiveJob: !!hasActiveJob,
     checkScrapingStatus,
     initiateScraping,
     clearCurrentJob,
-    refreshData
+    refreshData,
+    navigateToResults,
+    stayOnApplyPage
   };
 
   return (
