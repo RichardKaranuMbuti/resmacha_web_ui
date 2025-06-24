@@ -64,6 +64,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const logout = useCallback((): void => {
+    console.log('🚪 Logging out user...');
+    
     try {
       // Optionally call logout endpoint
       // authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
@@ -74,8 +76,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       storageUtils.clearAuthData();
       setUser(null);
       
+      // Redirect to login page
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        const currentPath = window.location.pathname;
+        const isAuthPage = currentPath === '/login' || currentPath === '/signup';
+        
+        if (!isAuthPage) {
+          console.log('🔄 Redirecting to login page...');
+          window.location.href = '/login';
+        }
       }
     }
   }, []);
@@ -101,7 +110,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (isValidUser(storedUserData) && accessToken) {
           setUser(storedUserData);
+          console.log('✅ User initialized from storage');
         } else if (storedUserData) {
+          console.log('❌ Invalid user data in storage, clearing...');
           storageUtils.clearAuthData();
         }
       } catch (error) {
@@ -115,31 +126,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  // Add global axios response interceptor that calls logout on 401
-  useEffect(() => {
-    const interceptorId = authAxios.interceptors.response.use(
-      (response) => response,
-      (error: AxiosError) => {
-        // If we get a 401 and it's not a login/register request
-        if (error.response?.status === 401 && 
-            !error.config?.url?.includes('/login') && 
-            !error.config?.url?.includes('/register')) {
-          console.log('🚨 401 detected in AuthProvider, logging out...');
-          logout();
-        }
-        return Promise.reject(error);
-      }
-    );
-
-    return () => {
-      authAxios.interceptors.response.eject(interceptorId);
-    };
-  }, [logout]);
-
-  // Add event listener to handle auth:logout event from axios interceptor
+  // Listen for logout events from axios interceptor
   useEffect(() => {
     const handleAuthLogout = () => {
-      console.log('🚨 Received auth:logout event');
+      console.log('🚨 Received auth:logout event from axios');
       logout();
     };
 
@@ -152,37 +142,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [logout]);
 
-  const refreshToken = useCallback(async (): Promise<void> => {
-    try {
-      const currentRefreshToken = storageUtils.getRefreshToken();
-      if (!currentRefreshToken) {
-        throw new Error('No refresh token available');
-      }
-
-      // FIXED: Use consistent endpoint
-      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
-        refresh_token: currentRefreshToken
-      });
-
-      const { access_token, refresh_token: newRefreshToken, expires_in } = response.data;
-      
-      setTokens(access_token, newRefreshToken);
-      storageUtils.setTokens(access_token, newRefreshToken, expires_in);
-
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      logout();
-      throw error;
-    }
-  }, [logout]);
-
   const login = useCallback(async (credentials: LoginRequest): Promise<void> => {
     try {
       setIsLoading(true);
       
       console.log('🚀 Starting login process with:', { email: credentials.email });
       
-      // FIXED: Use consistent endpoint and better logging
       const response = await authAxios.post<LoginResponse>(
         API_ENDPOINTS.AUTH.LOGIN,
         {
@@ -311,7 +276,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         password: '[HIDDEN]' 
       });
       
-      // FIXED: Use consistent endpoint and better logging
       const response = await authAxios.post<RegisterResponse>(
         API_ENDPOINTS.AUTH.REGISTER,
         {
@@ -392,20 +356,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [login]);
 
-  // Auto-refresh token before expiry
-  useEffect(() => {
-    if (!user) return;
-
-    const refreshInterval = setInterval(async () => {
-      try {
-        await refreshToken();
-      } catch (error) {
-        console.error('Auto refresh failed:', error);
-      }
-    }, 15 * 60 * 1000); // Refresh every 15 minutes
-
-    return () => clearInterval(refreshInterval);
-  }, [user, refreshToken]);
+  // Simplified refresh token function - mainly for manual calls
+  const refreshToken = useCallback(async (): Promise<void> => {
+    // The actual token refresh is now handled by axios interceptors
+    // This is kept for API compatibility
+    console.log('🔄 Manual token refresh requested');
+  }, []);
 
   const value: AuthContextType = {
     user,

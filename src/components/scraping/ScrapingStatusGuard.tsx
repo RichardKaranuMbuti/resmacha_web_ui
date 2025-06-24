@@ -33,6 +33,20 @@ const ActiveJobStatus = () => {
   if (!currentJob) return null;
 
   const getStatusConfig = () => {
+    // Handle undefined/null status
+    if (!currentJob?.status) {
+      return {
+        icon: <Bot className="w-8 h-8 text-gray-500" />,
+        title: "🤖 Checking Status...",
+        subtitle: "Loading job status...",
+        bgColor: "from-gray-400 to-gray-500",
+        textColor: "text-gray-600",
+        bgClass: "bg-gray-50",
+        showProgress: true,
+        progressText: "Connecting to job status..."
+      };
+    }
+
     switch (currentJob.status) {
       case 'pending':
       case 'queued':
@@ -82,7 +96,7 @@ const ActiveJobStatus = () => {
       case 'completed':
         return {
           icon: <CheckCircle className="w-8 h-8 text-green-500" />,
-          title: `🎉 Mission Complete! Found ${currentJob.total_jobs_found} jobs`,
+          title: `🎉 Mission Complete! Found ${currentJob.total_jobs_found || 0} jobs`,
           subtitle: "Your AI agents have successfully completed the job hunt. Ready to explore your opportunities?",
           bgColor: "from-green-500 to-emerald-600",
           textColor: "text-green-600",
@@ -126,7 +140,7 @@ const ActiveJobStatus = () => {
         return {
           icon: <Bot className="w-8 h-8 text-gray-500" />,
           title: "🤖 Status Unknown",
-          subtitle: "Checking job status...",
+          subtitle: currentJob?.status ? `Current status: ${currentJob.status}` : "Checking job status...",
           bgColor: "from-gray-400 to-gray-500",
           textColor: "text-gray-600",
           bgClass: "bg-gray-50",
@@ -181,14 +195,14 @@ const ActiveJobStatus = () => {
                   <Target className="w-5 h-5 text-gray-400" />
                   <div className="text-left">
                     <p className="text-sm text-gray-500">Job Title</p>
-                    <p className="font-semibold text-gray-900">{currentJob.job_title}</p>
+                    <p className="font-semibold text-gray-900">{currentJob.job_title || 'N/A'}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Search className="w-5 h-5 text-gray-400" />
                   <div className="text-left">
                     <p className="text-sm text-gray-500">Location</p>
-                    <p className="font-semibold text-gray-900">{currentJob.location}</p>
+                    <p className="font-semibold text-gray-900">{currentJob.location || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -427,7 +441,7 @@ const ScrapingSummaryDashboard = ({ children }: { children: ReactNode }) => {
                             ? 'text-blue-600'
                             : 'text-yellow-600'
                     }`}>
-                      {scrap.status.replace('_', ' ')}
+                      {scrap.status?.replace?.('_', ' ') || 'Unknown'}
                     </p>
                   </div>
                 </div>
@@ -487,7 +501,13 @@ const LoadingState = () => (
 );
 
 export default function ScrapingStatusGuard({ children }: ScrapingStatusGuardProps) {
-  const { isLoading, error, hasActiveJob, refreshData } = useScrapingContext();
+  const { isLoading, error, currentJob, refreshData } = useScrapingContext();
+
+  // Determine if we should show job status (active jobs or terminal states)
+  const shouldShowJobStatus = currentJob && [
+    'pending', 'queued', 'processing', 'processing_details', 
+    'cards_completed', 'updating_database', 'retry', 'completed', 'failed', 'cancelled', 'dead_letter'
+  ].includes(currentJob.status);
 
   if (isLoading) {
     return <LoadingState />;
@@ -497,7 +517,7 @@ export default function ScrapingStatusGuard({ children }: ScrapingStatusGuardPro
     return <ErrorState error={error} onRetry={refreshData} />;
   }
 
-  if (hasActiveJob) {
+  if (shouldShowJobStatus) {
     return <ActiveJobStatus />;
   }
 

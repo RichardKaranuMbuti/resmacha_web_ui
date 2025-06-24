@@ -51,6 +51,7 @@ interface ScrapingContextType {
   isLoading: boolean;
   error: string | null;
   hasActiveJob: boolean;
+  shouldShowJobStatus: boolean;
   checkScrapingStatus: () => Promise<void>;
   initiateScraping: (jobTitle: string, location: string) => Promise<string>;
   clearCurrentJob: () => void;
@@ -127,6 +128,12 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
     'cards_completed', 'updating_database', 'retry'
   ].includes(currentJob.status);
 
+  // Determine if we should show the job status screen (including completed/failed jobs)
+  const shouldShowJobStatus = currentJob && [
+    'pending', 'queued', 'processing', 'processing_details', 
+    'cards_completed', 'updating_database', 'retry', 'completed', 'failed', 'cancelled', 'dead_letter'
+  ].includes(currentJob.status);
+
   const checkScrapingStatus = useCallback(async () => {
     const storedJobId = localStorage.getItem(STORAGE_KEY);
     if (!storedJobId) return;
@@ -138,6 +145,14 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Validate that we have a valid status
+        if (!data.status || typeof data.status !== 'string') {
+          console.warn('Invalid status received:', data.status);
+          setError('Received invalid job status. Please try refreshing.');
+          return;
+        }
+        
         const lastKnownStatus = localStorage.getItem(LAST_KNOWN_STATUS_KEY);
         
         // Check for invalid status transitions
@@ -311,6 +326,7 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
     isLoading,
     error,
     hasActiveJob: !!hasActiveJob,
+    shouldShowJobStatus: !!shouldShowJobStatus,
     checkScrapingStatus,
     initiateScraping,
     clearCurrentJob,

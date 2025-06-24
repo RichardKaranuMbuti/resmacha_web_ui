@@ -20,19 +20,20 @@ function isTokenExpired(token: string): boolean {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Math.floor(Date.now() / 1000);
     
-    // Check if token has expired (with 5 minute buffer for proactive refresh)
-    return payload.exp < (currentTime + 300);
+    // Check if token has expired (with 2 minute buffer)
+    return payload.exp < (currentTime + 120);
   } catch (error) {
     // If we can't decode the token, consider it invalid/expired
-    console.error('Token decode error:', error);
+    console.error('Token decode error in middleware:', error);
     return true;
   }
 }
 
 // Helper function to validate token format
 function isValidTokenFormat(token: string): boolean {
-  return token.split('.').length === 3;
+  return !!token && token.split('.').length === 3;
 }
+
 
 export function middleware(request: NextRequest) {
   const tokenCookie = request.cookies.get('access_token');
@@ -63,16 +64,22 @@ export function middleware(request: NextRequest) {
       console.log(`✅ Token is valid`);
     } else {
       console.log(`❌ Token is invalid or expired`);
+      
+      // If we have a refresh token, let the app handle the refresh
+      // instead of immediately redirecting
+      if (refreshTokenCookie?.value && isProtectedRoute) {
+        console.log(`🔄 Token expired but refresh token exists, allowing through for refresh attempt`);
+        return NextResponse.next();
+      }
     }
   } else {
     console.log(`❌ No token found`);
   }
   
   // Redirect unauthenticated users away from protected routes
-  if (isProtectedRoute && !hasValidToken) {
-    console.log(`🚨 Redirecting to login - protected route without valid token`);
+  if (isProtectedRoute && !hasValidToken && !refreshTokenCookie?.value) {
+    console.log(`🚨 Redirecting to login - protected route without valid token or refresh token`);
     
-    // Clear invalid tokens
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     

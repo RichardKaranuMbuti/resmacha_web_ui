@@ -1,3 +1,4 @@
+//src/config/axiosConfig.ts
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { API_BASE_URLS, API_ENDPOINTS, REQUEST_TIMEOUT } from '../constants/api';
 
@@ -58,9 +59,38 @@ export const matchingAxios: AxiosInstance = axios.create({
   },
 });
 
+// Define types for the failed queue
+interface QueuedRequest {
+  resolve: (value: string | null) => void;
+  reject: (error: Error) => void;
+}
+
 // Token management
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
+let isRefreshing = false;
+let failedQueue: QueuedRequest[] = [];
+
+// Process failed requests queue
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
+// Emit custom logout event
+const emitLogoutEvent = () => {
+  if (typeof window !== 'undefined') {
+    console.log('🚨 Emitting auth:logout event from axios');
+    window.dispatchEvent(new CustomEvent('auth:logout'));
+  }
+};
 
 export const setTokens = (access: string, refresh: string): void => {
   accessToken = access;
@@ -112,12 +142,40 @@ const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
   return response;
 };
 
-const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
-  const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+// Define interface for retry-enabled request config
+interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
+const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
+  const originalRequest = error.config as RetryableAxiosRequestConfig;
 
   // If the error is 401 and we haven't already tried to refresh
   if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    
+    // Skip refresh for auth endpoints to avoid infinite loops
+    if (originalRequest.url?.includes('/auth/login') || 
+        originalRequest.url?.includes('/auth/register') ||
+        originalRequest.url?.includes('/auth/refresh')) {
+      return Promise.reject(error);
+    }
+
+    // If we're already refreshing, queue this request
+    if (isRefreshing) {
+      return new Promise<string | null>((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then(token => {
+        if (originalRequest.headers && token) {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+        }
+        return axios(originalRequest);
+      }).catch(err => {
+        return Promise.reject(err);
+      });
+    }
+
     originalRequest._retry = true;
+    isRefreshing = true;
 
     try {
       const currentRefreshToken = getRefreshToken();
@@ -125,43 +183,63 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosError> => {
         throw new Error('No refresh token available');
       }
 
-      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
+      console.log('🔄 Attempting token refresh...');
+      
+      // Create a new axios instance to avoid interceptor loops
+      const refreshAxios = axios.create({
+        baseURL: API_BASE_URLS.USER,
+        timeout: REQUEST_TIMEOUT,
+      });
+
+      const response = await refreshAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
         refresh_token: currentRefreshToken
       });
 
       const { access_token, refresh_token: newRefreshToken } = response.data;
       
+      console.log('✅ Token refresh successful');
+      
       // Update tokens (this will also update cookies)
       setTokens(access_token, newRefreshToken);
+      
+      // Process the queue with the new token
+      processQueue(null, access_token);
 
       // Retry the original request with new token
-      originalRequest.headers = originalRequest.headers || {};
-      originalRequest.headers.Authorization = `Bearer ${access_token}`;
+      if (originalRequest.headers) {
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+      }
+      
       return axios(originalRequest);
 
     } catch (refreshError) {
-      console.error('🚨 Token refresh failed, forcing logout');
+      console.error('🚨 Token refresh failed:', refreshError);
       
-      // Refresh failed, clear tokens and redirect to login
+      // Process the queue with error
+      const error = refreshError instanceof Error ? refreshError : new Error('Token refresh failed');
+      processQueue(error, null);
+      
+      // Clear tokens and emit logout event
       clearTokens();
-      
-      // Force redirect to login - middleware will handle the redirect
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
+      emitLogoutEvent();
       
       return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
     }
   }
 
   return Promise.reject(error);
 };
 
-// Add interceptors to ALL instances
-[authAxios, apiAxios, matchingAxios].forEach(instance => {
+// Add interceptors to instances that need authentication
+[apiAxios, matchingAxios].forEach(instance => {
   instance.interceptors.request.use(requestInterceptor);
   instance.interceptors.response.use(responseInterceptor, errorInterceptor);
 });
+
+// Don't add interceptors to authAxios to avoid loops during auth operations
+authAxios.interceptors.request.use(requestInterceptor);
 
 // Initialize tokens from cookies on load
 const initializeTokens = (): void => {
