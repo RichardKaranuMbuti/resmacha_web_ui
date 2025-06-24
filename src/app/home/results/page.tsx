@@ -12,12 +12,21 @@ import { StatsCards } from '@src/components/results/StatsCards';
 import { JobGrid } from '@src/components/results/JobGrid';
 import { JobDetailModal } from '@src/components/results/JobDetailModal';
 import { ErrorModal } from '@src/components/ui/ErrorModal';
+import { MatchingCompletionModal } from '@src/components/results/MatchingCompletionModal';
 import { useMatchingContext } from '@src/context/MatchingContext';
 
 type ViewState = 'loading' | 'start' | 'processing' | 'results' | 'matching';
 
 export default function ResultsPage() {
-  const { checkMatchingStatus } = useMatchingContext();
+  const { 
+    checkMatchingStatus, 
+    showCompletionModal, 
+    hideCompletionModal,
+    hasUserInitiatedMatching,
+    setUserInitiatedMatching,
+    startPolling,
+    stopPolling
+  } = useMatchingContext();
   
   const {
     isMatching,
@@ -68,6 +77,15 @@ export default function ResultsPage() {
     initializePage();
   }, [initialized, checkMatchingStatus, checkForExistingResults]);
 
+  // Start polling when processing begins
+  useEffect(() => {
+    if (isProcessing && hasUserInitiatedMatching) {
+      startPolling();
+    } else if (!isProcessing) {
+      stopPolling();
+    }
+  }, [isProcessing, hasUserInitiatedMatching, startPolling, stopPolling]);
+
   // Update view state based on ACTUAL matching status from API
   useEffect(() => {
     if (!initialized) return;
@@ -93,13 +111,16 @@ export default function ResultsPage() {
   const handleStartMatching = useCallback(async () => {
     try {
       resetError();
+      // Mark that user initiated matching
+      setUserInitiatedMatching(true);
       await startMatching();
       // State will be updated via useEffect based on isMatching state
     } catch (error) {
       console.error('Failed to start job matching:', error);
+      setUserInitiatedMatching(false); // Reset on error
       setShowErrorModal(true);
     }
-  }, [startMatching, resetError]);
+  }, [startMatching, resetError, setUserInitiatedMatching]);
 
   const handleLoadResults = useCallback(async () => {
     try {
@@ -138,6 +159,14 @@ export default function ResultsPage() {
     setShowErrorModal(false);
     resetError();
   }, [resetError]);
+
+  const handleCompletionModalClose = useCallback(() => {
+    hideCompletionModal();
+    // Load results if user hasn't viewed them yet
+    if (jobs.length === 0) {
+      handleLoadResults();
+    }
+  }, [hideCompletionModal, handleLoadResults, jobs.length]);
 
   const renderContent = () => {
     switch (viewState) {
@@ -214,6 +243,11 @@ export default function ResultsPage() {
         isOpen={showErrorModal} 
         onClose={handleCloseErrorModal} 
         error={error} 
+      />
+
+      <MatchingCompletionModal
+        isOpen={showCompletionModal}
+        onClose={handleCompletionModalClose}
       />
     </div>
   );

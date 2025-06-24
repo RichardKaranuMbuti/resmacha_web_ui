@@ -28,6 +28,10 @@ interface MatchingContextType {
   startPolling: () => void;
   stopPolling: () => void;
   resetError: () => void;
+  hasUserInitiatedMatching: boolean;
+  setUserInitiatedMatching: (value: boolean) => void;
+  showCompletionModal: boolean;
+  hideCompletionModal: () => void;
 }
 
 const MatchingContext = createContext<MatchingContextType | undefined>(undefined);
@@ -41,9 +45,34 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [hasUserInitiatedMatching, setHasUserInitiatedMatching] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [previousProcessingState, setPreviousProcessingState] = useState<boolean | null>(null);
 
   const resetError = useCallback(() => {
     setError(null);
+  }, []);
+
+  const hideCompletionModal = useCallback(() => {
+    setShowCompletionModal(false);
+  }, []);
+
+  const setUserInitiatedMatching = useCallback((value: boolean) => {
+    setHasUserInitiatedMatching(value);
+    // Store in sessionStorage to persist across page refreshes
+    if (value) {
+      sessionStorage.setItem('userInitiatedMatching', 'true');
+    } else {
+      sessionStorage.removeItem('userInitiatedMatching');
+    }
+  }, []);
+
+  // Restore user initiated matching state on mount
+  useEffect(() => {
+    const stored = sessionStorage.getItem('userInitiatedMatching');
+    if (stored === 'true') {
+      setHasUserInitiatedMatching(true);
+    }
   }, []);
 
   const stopPolling = useCallback(() => {
@@ -78,7 +107,21 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
       }
 
       const data: MatchingStatus = await response.json();
+      
+      // Detect completion: was processing, now not processing, and user had initiated matching
+      const wasProcessing = previousProcessingState === true;
+      const isNowNotProcessing = !data.has_ongoing_processing;
+      const shouldShowCompletion = wasProcessing && isNowNotProcessing && hasUserInitiatedMatching;
+
+      if (shouldShowCompletion) {
+        console.log('Matching completed! Showing completion modal...');
+        setShowCompletionModal(true);
+        // Clear the user initiated flag since we've handled completion
+        setUserInitiatedMatching(false);
+      }
+
       setMatchingStatus(data);
+      setPreviousProcessingState(data.has_ongoing_processing);
 
       // Auto-stop polling if processing is complete
       if (!data.has_ongoing_processing && pollingInterval) {
@@ -98,7 +141,7 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
     } finally {
       setIsLoading(false);
     }
-  }, [pollingInterval, stopPolling]);
+  }, [pollingInterval, stopPolling, previousProcessingState, hasUserInitiatedMatching, setUserInitiatedMatching]);
 
   const startPolling = useCallback(() => {
     if (pollingInterval) return; // Already polling
@@ -136,6 +179,10 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
     startPolling,
     stopPolling,
     resetError,
+    hasUserInitiatedMatching,
+    setUserInitiatedMatching,
+    showCompletionModal,
+    hideCompletionModal,
   };
 
   return (
