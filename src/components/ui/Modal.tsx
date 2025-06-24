@@ -8,9 +8,9 @@ const overlayVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-black/50 backdrop-blur-sm',
-        dark: 'bg-black/70',
-        light: 'bg-white/80 backdrop-blur-sm',
+        default: 'bg-black/60 backdrop-blur-sm',
+        dark: 'bg-black/80',
+        light: 'bg-black/40 backdrop-blur-sm',
       },
     },
     defaultVariants: {
@@ -20,7 +20,7 @@ const overlayVariants = cva(
 );
 
 const modalVariants = cva(
-  'relative w-full max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl transition-all',
+  'relative w-full max-h-[90vh] overflow-y-auto rounded-lg bg-white border border-gray-200 shadow-2xl transition-all',
   {
     variants: {
       size: {
@@ -114,7 +114,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50">
               <div>
                 {title && (
                   <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
@@ -122,7 +122,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
                   </h2>
                 )}
                 {description && (
-                  <p id="modal-description" className="mt-1 text-sm text-gray-500">
+                  <p id="modal-description" className="mt-1 text-sm text-gray-600">
                     {description}
                   </p>
                 )}
@@ -130,7 +130,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
               {showCloseButton && (
                 <button
                   onClick={onClose}
-                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-plum focus:ring-offset-2"
+                  className="rounded-md p-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
                   aria-label="Close modal"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +142,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
           )}
 
           {/* Content */}
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 bg-white">
             {children}
           </div>
         </div>
@@ -179,13 +179,13 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
         </div>
-        <p className="text-sm text-gray-600 mb-6">{message}</p>
+        <p className="text-sm text-gray-700 mb-6 leading-relaxed">{message}</p>
         <div className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="border-gray-300 text-gray-700 hover:bg-gray-50">
             Close
           </Button>
           {onAction && (
-            <Button onClick={onAction}>
+            <Button onClick={onAction} className="bg-red-600 hover:bg-red-700 text-white">
               {actionLabel}
             </Button>
           )}
@@ -221,13 +221,13 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-sm text-gray-600 mb-6">{message}</p>
+        <p className="text-sm text-gray-700 mb-6 leading-relaxed">{message}</p>
         <div className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="border-gray-300 text-gray-700 hover:bg-gray-50">
             Close
           </Button>
           {onAction && (
-            <Button onClick={onAction}>
+            <Button onClick={onAction} className="bg-green-600 hover:bg-green-700 text-white">
               {actionLabel}
             </Button>
           )}

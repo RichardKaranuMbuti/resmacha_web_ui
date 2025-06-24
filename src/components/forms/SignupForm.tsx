@@ -321,208 +321,206 @@ export const SignupForm: React.FC = () => {
   const isFormDisabled = isSubmitting || isLoading;
 
   return (
-    <>
-      <Container size="md" className="min-h-screen flex items-center justify-center py-12">
-        <div className="w-full max-w-md space-y-8">
-          {/* Header */}
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Create Account</h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Join us today and get started
-            </p>
+  <>
+    <Container size="md" className="min-h-screen flex items-center justify-center py-12 px-4">
+      <div className="w-full max-w-md space-y-8">
+        {/* Header */}
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Create Account</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            Join us today and get started
+          </p>
+        </div>
+
+        {/* Inline Status Messages */}
+        {inlineError && (
+          <Alert 
+            variant="error" 
+            dismissible 
+            onDismiss={() => setInlineError('')}
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            }
+          >
+            {inlineError}
+          </Alert>
+        )}
+
+        {inlineSuccess && (
+          <Alert 
+            variant="success"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            }
+          >
+            {inlineSuccess}
+          </Alert>
+        )}
+
+        {/* Loading Spinner */}
+        {isSubmitting && (
+          <div className="flex justify-center py-4">
+            <Spinner size="lg" showLabel label="Creating your account..." />
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6" noValidate>
+          <div className="space-y-5">
+            {/* Email */}
+            <TextField
+              label="Email Address"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              error={errors.email}
+              placeholder="you@example.com"
+              required
+              disabled={isFormDisabled}
+              autoComplete="email"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            {/* Username */}
+            <TextField
+              label="Username"
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              error={errors.username}
+              placeholder="username"
+              required
+              disabled={isFormDisabled}
+              helperText="3-20 characters, letters, numbers, and underscores only"
+              autoComplete="username"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            {/* First Name */}
+            <TextField
+              label="First Name"
+              type="text"
+              name="first_name"
+              value={formData.first_name}
+              onChange={handleInputChange}
+              error={errors.first_name}
+              placeholder="John"
+              required
+              disabled={isFormDisabled}
+              autoComplete="given-name"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            {/* Last Name */}
+            <TextField
+              label="Last Name"
+              type="text"
+              name="last_name"
+              value={formData.last_name}
+              onChange={handleInputChange}
+              error={errors.last_name}
+              placeholder="Doe"
+              required
+              disabled={isFormDisabled}
+              autoComplete="family-name"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            {/* Password */}
+            <TextField
+              label="Password"
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              error={errors.password}
+              placeholder="Enter your password"
+              required
+              disabled={isFormDisabled}
+              showPasswordToggle
+              autoComplete="new-password"
+              helperText="At least 8 characters with uppercase, lowercase, number, and special character"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 caret-blue-500"
+            />
+
+            {/* Confirm Password */}
+            <TextField
+              label="Confirm Password"
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleInputChange}
+              error={errors.confirmPassword}
+              placeholder="Confirm your password"
+              required
+              disabled={isFormDisabled}
+              showPasswordToggle
+              autoComplete="new-password"
+              className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 caret-blue-500"
+            />
           </div>
 
-          {/* Inline Status Messages */}
-          {inlineError && (
-            <Alert 
-              variant="error" 
-              dismissible 
-              onDismiss={() => setInlineError('')}
-              icon={
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              }
-            >
-              {inlineError}
-            </Alert>
-          )}
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            fullWidth
+            loading={isSubmitting || isLoading}
+            loadingText="Creating Account..."
+            disabled={isFormDisabled}
+            size="lg"
+            className="bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+          >
+            {isSubmitting ? (
+              <div className="flex items-center justify-center gap-2">
+                <Spinner size="sm" variant="white" />
+                <span>Creating Account...</span>
+              </div>
+            ) : (
+              'Create Account'
+            )}
+          </Button>
 
-          {inlineSuccess && (
-            <Alert 
-              variant="success"
-              icon={
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              }
-            >
-              {inlineSuccess}
-            </Alert>
-          )}
+          {/* Login Link */}
+          <div className="text-center pt-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Already have an account?{' '}
+              <a
+                href="/auth/login"
+                className="font-semibold text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200 underline-offset-4 hover:underline"
+              >
+                Sign in here
+              </a>
+            </p>
+          </div>
+        </form>
+      </div>
+    </Container>
 
-          {/* Loading Spinner */}
-          {isSubmitting && (
-            <div className="flex justify-center">
-              <Spinner size="lg" showLabel label="Creating your account..." />
-            </div>
-          )}
+    {/* Error Modal */}
+    <ErrorModal
+      isOpen={showErrorModal}
+      onClose={() => setShowErrorModal(false)}
+      title="Signup Failed"
+      message={errorMessage}
+      actionLabel="Try Again"
+      onAction={handleRetry}
+    />
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6" noValidate>
-            <div className="space-y-4">
-              {/* Email */}
-              <TextField
-                label="Email Address"
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                error={errors.email}
-                placeholder="you@example.com"
-                required
-                disabled={isFormDisabled}
-                autoComplete="email"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-              />
-
-              {/* Username */}
-              <TextField
-                label="Username"
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleInputChange}
-                error={errors.username}
-                placeholder="username"
-                required
-                disabled={isFormDisabled}
-                helperText="3-20 characters, letters, numbers, and underscores only"
-                autoComplete="username"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-              />
-
-              {/* First Name */}
-              <TextField
-                label="First Name"
-                type="text"
-                name="first_name"
-                value={formData.first_name}
-                onChange={handleInputChange}
-                error={errors.first_name}
-                placeholder="John"
-                required
-                disabled={isFormDisabled}
-                autoComplete="given-name"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-              />
-
-              {/* Last Name */}
-              <TextField
-                label="Last Name"
-                type="text"
-                name="last_name"
-                value={formData.last_name}
-                onChange={handleInputChange}
-                error={errors.last_name}
-                placeholder="Doe"
-                required
-                disabled={isFormDisabled}
-                autoComplete="family-name"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-              />
-
-              {/* Password */}
-              <TextField
-                label="Password"
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                error={errors.password}
-                placeholder="Enter your password"
-                required
-                disabled={isFormDisabled}
-                showPasswordToggle
-                autoComplete="new-password"
-                helperText="At least 8 characters with uppercase, lowercase, number, and special character"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-                style={{ color: '#111827' }} // Force dark text for better visibility
-              />
-
-              {/* Confirm Password */}
-              <TextField
-                label="Confirm Password"
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                error={errors.confirmPassword}
-                placeholder="Confirm your password"
-                required
-                disabled={isFormDisabled}
-                showPasswordToggle
-                autoComplete="new-password"
-                className="text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-                style={{ color: '#111827' }} // Force dark text for better visibility
-              />
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              fullWidth
-              loading={isSubmitting || isLoading}
-              loadingText="Creating Account..."
-              disabled={isFormDisabled}
-              size="lg"
-              className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Spinner size="sm" variant="white" />
-                  <span>Creating Account...</span>
-                </div>
-              ) : (
-                'Create Account'
-              )}
-            </Button>
-
-            {/* Login Link */}
-            <div className="text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Already have an account?{' '}
-                <a
-                  href="/auth/login"
-                  className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200"
-                >
-                  Sign in here
-                </a>
-              </p>
-            </div>
-          </form>
-        </div>
-      </Container>
-
-      {/* Error Modal */}
-      <ErrorModal
-        isOpen={showErrorModal}
-        onClose={() => setShowErrorModal(false)}
-        title="Signup Failed"
-        message={errorMessage}
-        actionLabel="Try Again"
-        onAction={handleRetry}
-      />
-
-      {/* Success Modal */}
-      <SuccessModal
-        isOpen={showSuccessModal}
-        onClose={handleSuccessClose}
-        title="Welcome!"
-        message="Account created successfully! You are now logged in and ready to get started."
-        actionLabel="Continue to Dashboard"
-        onAction={handleSuccessClose}
-      />
-    </>
-  );
-};
+    {/* Success Modal */}
+    <SuccessModal
+      isOpen={showSuccessModal}
+      onClose={handleSuccessClose}
+      title="Welcome!"
+      message="Account created successfully! You are now logged in and ready to get started."
+      actionLabel="Continue to Dashboard"
+      onAction={handleSuccessClose}
+    />
+  </>
+);
+}
