@@ -4,6 +4,7 @@
 import { apiAxios } from '@src/config/axiosConfig';
 import { API_BASE_URLS, API_ENDPOINTS } from '@src/constants/api';
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import axios, { AxiosError } from 'axios';
 
 interface ScrapingJob {
   scraping_job_id: string;
@@ -65,31 +66,25 @@ const ScrapingContext = createContext<ScrapingContextType | undefined>(undefined
 const STORAGE_KEY = 'scraping_job_id';
 const LAST_KNOWN_STATUS_KEY = 'last_known_status';
 
-// Helper function to get auth token
-const getAuthToken = () => {
-  const authHeader = apiAxios.defaults.headers.common['Authorization'];
-  if (typeof authHeader === 'string') {
-    return authHeader.replace('Bearer ', '');
-  }
-  return null;
-};
+// Create a separate axios instance for scraping API
+const scrapingAxios = axios.create({
+  baseURL: API_BASE_URLS.SCRAPING,
+  timeout: 30000, // 30 seconds timeout for scraping operations
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
 
-// Helper function to make authenticated requests
-const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) => {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('No authentication token available');
+// Add request interceptor to attach auth token
+scrapingAxios.interceptors.request.use((config) => {
+  // Get token from apiAxios instance (which has the token management)
+  const authHeader = apiAxios.defaults.headers.common['Authorization'] as string;
+  if (authHeader) {
+    config.headers.Authorization = authHeader;
   }
-
-  return fetch(url, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-};
+  return config;
+});
 
 // Helper function to determine if status transition is valid
 const isValidStatusTransition = (currentStatus: string, newStatus: string): boolean => {
@@ -135,91 +130,110 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
   ].includes(currentJob.status);
 
   const checkScrapingStatus = useCallback(async () => {
-    const storedJobId = localStorage.getItem(STORAGE_KEY);
+    const storedJobId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     if (!storedJobId) return;
 
     try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URLS.SCRAPING}${API_ENDPOINTS.SCRAPING.SCRAPE_STATUS}/${storedJobId}`
+      console.log('🔍 Checking scraping status for job:', storedJobId);
+      
+      const response = await scrapingAxios.get<ScrapingJob>(
+        `${API_ENDPOINTS.SCRAPING.SCRAPE_STATUS}/${storedJobId}`
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Validate that we have a valid status
-        if (!data.status || typeof data.status !== 'string') {
-          console.warn('Invalid status received:', data.status);
-          setError('Received invalid job status. Please try refreshing.');
-          return;
-        }
-        
-        const lastKnownStatus = localStorage.getItem(LAST_KNOWN_STATUS_KEY);
-        
-        // Check for invalid status transitions
-        if (lastKnownStatus && !isValidStatusTransition(lastKnownStatus, data.status)) {
-          console.warn(`Invalid status transition: ${lastKnownStatus} -> ${data.status}`);
-          setError('Something unexpected happened with your job. You can start a new search.');
-          return;
-        }
-        
-        setCurrentJob(data);
+      const data = response.data;
+      
+      // Validate that we have a valid status
+      if (!data.status || typeof data.status !== 'string') {
+        console.warn('⚠️ Invalid status received:', data.status);
+        setError('Received invalid job status. Please try refreshing.');
+        return;
+      }
+      
+      const lastKnownStatus = typeof window !== 'undefined' ? localStorage.getItem(LAST_KNOWN_STATUS_KEY) : null;
+      
+      // Check for invalid status transitions
+      if (lastKnownStatus && !isValidStatusTransition(lastKnownStatus, data.status)) {
+        console.warn(`⚠️ Invalid status transition: ${lastKnownStatus} -> ${data.status}`);
+        setError('Something unexpected happened with your job. You can start a new search.');
+        return;
+      }
+      
+      setCurrentJob(data);
+      
+      if (typeof window !== 'undefined') {
         localStorage.setItem(LAST_KNOWN_STATUS_KEY, data.status);
-        
-        // Clear any previous errors
-        setError(null);
-        
-      } else if (response.status === 404) {
+      }
+      
+      // Clear any previous errors
+      setError(null);
+      
+      console.log('✅ Scraping status updated:', {
+        job_id: data.scraping_job_id,
+        status: data.status,
+        total_jobs_found: data.total_jobs_found
+      });
+      
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ message?: string }>;
+      console.error('❌ Error checking scraping status:', err);
+      
+      if (error.response?.status === 404) {
         // Job not found, clear stored data
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
+        console.log('🗑️ Job not found (404), clearing stored data');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
+        }
         setCurrentJob(null);
       } else {
-        throw new Error(`Failed to check status: ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Error checking scraping status:', err);
-      setError('Failed to check job status. Please try refreshing.');
-      
-      // Only clear on specific errors, not network issues
-      if (err instanceof Error && err.message.includes('404')) {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
-        setCurrentJob(null);
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to check job status. Please try refreshing.';
+        setError(errorMessage);
+        
+        // Only clear on specific errors, not network issues
+        if (error.response?.status === 404) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
+          }
+          setCurrentJob(null);
+        }
       }
     }
   }, []);
 
   const fetchRecentScraps = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URLS.SCRAPING}${API_ENDPOINTS.SCRAPING.RECENT_SCRAPS}`
+      console.log('📋 Fetching recent scraps...');
+      
+      const response = await scrapingAxios.get<{data: {scraps: RecentScrap[]}}>(
+        API_ENDPOINTS.SCRAPING.RECENT_SCRAPS
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        setRecentScraps(data.data?.scraps || []);
-      } else {
-        console.error('Failed to fetch recent scraps:', response.status);
-      }
-    } catch (err) {
-      console.error('Error fetching recent scraps:', err);
+      setRecentScraps(response.data.data?.scraps || []);
+      console.log('✅ Recent scraps fetched:', response.data.data?.scraps?.length || 0);
+      
+    } catch (err: unknown) {
+      const error = err as AxiosError;
+      console.error('❌ Error fetching recent scraps:', error);
+      // Don't throw error for non-critical data
     }
   }, []);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URLS.SCRAPING}${API_ENDPOINTS.SCRAPING.SCRAP_SUMMARY}`
+      console.log('📊 Fetching scraping summary...');
+      
+      const response = await scrapingAxios.get<{data: ScrapingSummary}>(
+        API_ENDPOINTS.SCRAPING.SCRAP_SUMMARY
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data.data);
-      } else {
-        console.error('Failed to fetch summary:', response.status);
-      }
-    } catch (err) {
-      console.error('Error fetching summary:', err);
+      setSummary(response.data.data);
+      console.log('✅ Summary fetched:', response.data.data);
+      
+    } catch (err: unknown) {
+      const error = err as AxiosError;
+      console.error('❌ Error fetching summary:', error);
+      // Don't throw error for non-critical data
     }
   }, []);
 
@@ -228,15 +242,21 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
     setError(null);
     
     try {
+      console.log('🔄 Refreshing scraping data...');
+      
       await Promise.all([
         checkScrapingStatus(),
         fetchRecentScraps(),
         fetchSummary()
       ]);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load scraping data';
+      
+      console.log('✅ Data refresh completed');
+      
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ message?: string }>;
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to load scraping data';
       setError(errorMessage);
-      console.error('Error refreshing data:', err);
+      console.error('❌ Error refreshing data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -244,21 +264,19 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
   const initiateScraping = useCallback(async (jobTitle: string, location: string): Promise<string> => {
     try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URLS.SCRAPING}${API_ENDPOINTS.SCRAPING.LINKEDIN_JOB}?job_title=${encodeURIComponent(jobTitle)}&location=${encodeURIComponent(location)}`,
-        { method: 'POST' }
+      console.log('🚀 Initiating scraping for:', { jobTitle, location });
+      
+      const response = await scrapingAxios.post<{scraping_job_id: string}>(
+        `${API_ENDPOINTS.SCRAPING.LINKEDIN_JOB}?job_title=${encodeURIComponent(jobTitle)}&location=${encodeURIComponent(location)}`
       );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       
       // Store the job ID and initial status
-      localStorage.setItem(STORAGE_KEY, data.scraping_job_id);
-      localStorage.setItem(LAST_KNOWN_STATUS_KEY, 'pending');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, data.scraping_job_id);
+        localStorage.setItem(LAST_KNOWN_STATUS_KEY, 'pending');
+      }
       
       // Update current job state
       setCurrentJob({
@@ -271,25 +289,38 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
         total_jobs_found: 0
       });
 
+      console.log('✅ Scraping initiated successfully:', data.scraping_job_id);
+      
       return data.scraping_job_id;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initiate scraping';
+      
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ message?: string }>;
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to initiate scraping';
+      console.error('❌ Error initiating scraping:', err);
       throw new Error(errorMessage);
     }
   }, []);
 
   const clearCurrentJob = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
+    console.log('🗑️ Clearing current job');
+    
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LAST_KNOWN_STATUS_KEY);
+    }
     setCurrentJob(null);
   }, []);
 
   const navigateToResults = useCallback(() => {
+    console.log('🔗 Navigating to results page');
     clearCurrentJob();
-    window.location.href = '/home/results';
+    if (typeof window !== 'undefined') {
+      window.location.href = '/home/results';
+    }
   }, [clearCurrentJob]);
 
   const stayOnApplyPage = useCallback(() => {
+    console.log('📄 Staying on apply page, refreshing data');
     clearCurrentJob();
     // Refresh the data to show the dashboard
     refreshData();
@@ -297,6 +328,7 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
 
   // Initial data load
   useEffect(() => {
+    console.log('🏁 ScrapingProvider initializing...');
     refreshData();
   }, [refreshData]);
 
@@ -304,18 +336,26 @@ export function ScrapingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hasActiveJob) return;
 
+    console.log('⏰ Starting polling for active job');
+    
     const interval = setInterval(() => {
       checkScrapingStatus();
     }, 8000); // Check every 8 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log('⏹️ Stopping polling interval');
+      clearInterval(interval);
+    };
   }, [hasActiveJob, checkScrapingStatus]);
 
   // Check for existing job on mount
   useEffect(() => {
-    const storedJobId = localStorage.getItem(STORAGE_KEY);
-    if (storedJobId) {
-      checkScrapingStatus();
+    if (typeof window !== 'undefined') {
+      const storedJobId = localStorage.getItem(STORAGE_KEY);
+      if (storedJobId) {
+        console.log('🔍 Found existing job on mount:', storedJobId);
+        checkScrapingStatus();
+      }
     }
   }, [checkScrapingStatus]);
 

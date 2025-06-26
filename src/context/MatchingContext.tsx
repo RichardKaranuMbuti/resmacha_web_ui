@@ -2,8 +2,9 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { API_BASE_URLS, API_ENDPOINTS } from '@src/constants/api';
-import { apiAxios } from '@src/config/axiosConfig';
+import { API_ENDPOINTS } from '@src/constants/api';
+import { matchingAxios } from '@src/config/axiosConfig';
+import { AxiosError } from 'axios';
 
 interface MatchingStatus {
   user_id: number;
@@ -60,24 +61,28 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
   const setUserInitiatedMatching = useCallback((value: boolean) => {
     setHasUserInitiatedMatching(value);
     // Store in sessionStorage to persist across page refreshes
-    if (value) {
-      sessionStorage.setItem('userInitiatedMatching', 'true');
-    } else {
-      sessionStorage.removeItem('userInitiatedMatching');
+    if (typeof window !== 'undefined') {
+      if (value) {
+        sessionStorage.setItem('userInitiatedMatching', 'true');
+      } else {
+        sessionStorage.removeItem('userInitiatedMatching');
+      }
     }
   }, []);
 
   // Restore user initiated matching state on mount
   useEffect(() => {
-    const stored = sessionStorage.getItem('userInitiatedMatching');
-    if (stored === 'true') {
-      setHasUserInitiatedMatching(true);
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('userInitiatedMatching');
+      if (stored === 'true') {
+        setHasUserInitiatedMatching(true);
+      }
     }
   }, []);
 
   const stopPolling = useCallback(() => {
     if (pollingInterval) {
-      console.log('Stopping matching status polling...');
+      console.log('🔄 Stopping matching status polling...');
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
@@ -91,22 +96,13 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URLS.MATCHING}${API_ENDPOINTS.MATCHING.CHECK_USER_ONGOING_MATCHING}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiAxios.defaults.headers.common['Authorization']?.toString().replace('Bearer ', '')}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      console.log('🔍 Checking matching status...');
+      
+      const response = await matchingAxios.get<MatchingStatus>(
+        API_ENDPOINTS.MATCHING.CHECK_USER_ONGOING_MATCHING
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to check matching status: ${response.status}`);
-      }
-
-      const data: MatchingStatus = await response.json();
+      const data = response.data;
       
       // Detect completion: was processing, now not processing, and user had initiated matching
       const wasProcessing = previousProcessingState === true;
@@ -114,7 +110,7 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
       const shouldShowCompletion = wasProcessing && isNowNotProcessing && hasUserInitiatedMatching;
 
       if (shouldShowCompletion) {
-        console.log('Matching completed! Showing completion modal...');
+        console.log('✅ Matching completed! Showing completion modal...');
         setShowCompletionModal(true);
         // Clear the user initiated flag since we've handled completion
         setUserInitiatedMatching(false);
@@ -125,17 +121,24 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
 
       // Auto-stop polling if processing is complete
       if (!data.has_ongoing_processing && pollingInterval) {
-        console.log('Processing completed, stopping polling...');
+        console.log('⏹️ Processing completed, stopping polling...');
         stopPolling();
       }
 
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to check matching status';
+      console.log('✅ Matching status updated:', {
+        has_ongoing_processing: data.has_ongoing_processing,
+        total_ongoing_jobs: data.total_ongoing_jobs
+      });
+
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ message?: string }>;
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to check matching status';
       setError(errorMsg);
-      console.error('Error checking matching status:', err);
+      console.error('❌ Error checking matching status:', err);
       
       // Stop polling on error to prevent spam
       if (pollingInterval) {
+        console.log('⏹️ Stopping polling due to error');
         stopPolling();
       }
     } finally {
@@ -144,9 +147,17 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
   }, [pollingInterval, stopPolling, previousProcessingState, hasUserInitiatedMatching, setUserInitiatedMatching]);
 
   const startPolling = useCallback(() => {
-    if (pollingInterval) return; // Already polling
+    if (pollingInterval) {
+      console.log('ℹ️ Polling already active, skipping...');
+      return; // Already polling
+    }
 
-    console.log('Starting matching status polling...');
+    console.log('▶️ Starting matching status polling...');
+    
+    // Check immediately
+    checkMatchingStatus();
+    
+    // Then set up interval
     const interval = setInterval(() => {
       checkMatchingStatus();
     }, 5000); // Poll every 5 seconds
@@ -158,6 +169,7 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
   useEffect(() => {
     return () => {
       if (pollingInterval) {
+        console.log('🧹 Cleaning up polling interval on unmount');
         clearInterval(pollingInterval);
       }
     };
