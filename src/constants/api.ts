@@ -38,6 +38,7 @@ export const API_ENDPOINTS = {
     REGISTER: '/api/v1/users/auth/register',
     LOGIN: '/api/v1/users/auth/login', 
     REFRESH: '/api/v1/users/auth/refresh-token',
+    ME: '/api/v1/users/auth/me',
     LOGOUT: '/api/v1/users/auth/logout',
     VERIFY_EMAIL: '/api/v1/users/auth/verify-email',
     FORGOT_PASSWORD: '/api/v1/users/auth/forgot-password',  

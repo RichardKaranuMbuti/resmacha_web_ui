@@ -1,8 +1,7 @@
-//src/config/axiosConfig.ts - Fixed version
+//src/config/axiosConfig.ts - localStorage token-based auth
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { API_BASE_URLS, API_ENDPOINTS, REQUEST_TIMEOUT } from '../constants/api';
-
-// REMOVED: Client-side cookie utilities - we'll use HTTP-only cookies set by the server
+import { storageUtils } from '../utils/storage';
 
 // Create axios instances
 export const authAxios: AxiosInstance = axios.create({
@@ -12,7 +11,6 @@ export const authAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 export const apiAxios: AxiosInstance = axios.create({
@@ -22,7 +20,6 @@ export const apiAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 export const matchingAxios: AxiosInstance = axios.create({
@@ -32,7 +29,6 @@ export const matchingAxios: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: true, // ADDED: Enable cookies for all requests
 });
 
 // Define types for the failed queue
@@ -41,7 +37,6 @@ interface QueuedRequest {
   reject: (error: Error) => void;
 }
 
-// SIMPLIFIED: Remove client-side token management
 let isRefreshing = false;
 let failedQueue: QueuedRequest[] = [];
 
@@ -66,11 +61,16 @@ const emitLogoutEvent = () => {
   }
 };
 
-// REMOVED: setTokens, clearTokens, getAccessToken, getRefreshToken
-// Tokens are now managed server-side via HTTP-only cookies
-
-// REMOVED: Request interceptor - no need to manually add auth headers
-// Cookies are automatically sent with withCredentials: true
+// Request interceptor to add auth tokens
+const requestInterceptor = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+  const token = storageUtils.getAccessToken();
+  
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
+  return config;
+};
 
 // Response interceptor for token refresh
 const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
@@ -112,16 +112,35 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
     try {
       console.log('🔄 Attempting token refresh...');
       
-      // FIXED: Use the same axios instance to maintain cookie behavior
-      await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {});
-
-      console.log('✅ Token refresh successful');
+      const refreshToken = storageUtils.getRefreshToken();
       
-      // Process the queue - tokens are automatically updated via cookies
-      processQueue(null);
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
 
-      // Retry the original request
-      return axios(originalRequest);
+      // Call refresh endpoint with refresh token
+      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
+        refresh_token: refreshToken
+      });
+
+      if (response.data?.access_token) {
+        // Store new tokens
+        storageUtils.setTokens(response.data.access_token, response.data.refresh_token || refreshToken);
+        console.log('✅ Token refresh successful');
+        
+        // Update authorization header for the original request
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
+        }
+        
+        // Process the queue
+        processQueue(null);
+
+        // Retry the original request
+        return axios(originalRequest);
+      } else {
+        throw new Error('No access token in refresh response');
+      }
 
     } catch (refreshError) {
       console.error('🚨 Token refresh failed:', refreshError);
@@ -130,7 +149,8 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
       const errorObj = refreshError instanceof Error ? refreshError : new Error('Token refresh failed');
       processQueue(errorObj);
       
-      // Emit logout event - server will clear cookies
+      // Clear tokens and emit logout event
+      storageUtils.clearAuthData();
       emitLogoutEvent();
       
       return Promise.reject(refreshError);
@@ -142,7 +162,8 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
   return Promise.reject(error);
 };
 
-// Add interceptors to instances that need authentication
-[apiAxios, matchingAxios].forEach(instance => {
+// Add interceptors to all instances that need authentication
+[authAxios, apiAxios, matchingAxios].forEach(instance => {
+  instance.interceptors.request.use(requestInterceptor);
   instance.interceptors.response.use(responseInterceptor, errorInterceptor);
 });

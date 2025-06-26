@@ -42,11 +42,21 @@ class StorageManager {
 
   // Simple encryption/decryption (for demo - use proper encryption in production)
   private encrypt(data: string): string {
-    return btoa(encodeURIComponent(data));
+    try {
+      return btoa(encodeURIComponent(data));
+    } catch (error) {
+      console.error('Encryption error:', error);
+      return data; // Fallback to unencrypted data
+    }
   }
 
   private decrypt(data: string): string {
-    return decodeURIComponent(atob(data));
+    try {
+      return decodeURIComponent(atob(data));
+    } catch (error) {
+      console.error('Decryption error:', error);
+      return data; // Fallback to treating as unencrypted
+    }
   }
 
   private isExpired(item: StorageItem<unknown>): boolean {

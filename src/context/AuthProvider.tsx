@@ -1,4 +1,4 @@
-// src/context/AuthProvider.tsx - Fixed version
+// src/context/AuthProvider.tsx - localStorage token-based auth
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authAxios } from '../config/axiosConfig';
@@ -32,7 +32,14 @@ interface AuthProviderProps {
 interface ErrorResponse {
   message?: string;
   code?: string;
-  detail?: string | Array<{ msg?: string; message?: string }>;
+  detail?: string | Array<{
+    type?: string;
+    loc?: string[];
+    msg?: string;
+    message?: string;
+    input?: unknown;
+    ctx?: { reason?: string };
+  }>;
   [key: string]: unknown;
 }
 
@@ -48,20 +55,46 @@ interface AxiosError {
   };
 }
 
+// Helper function to parse validation errors
+const parseValidationErrors = (detail: ErrorResponse['detail']): string => {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  
+  if (Array.isArray(detail)) {
+    return detail
+      .map(err => err.msg || err.message || 'Validation error')
+      .join(', ');
+  }
+  
+  return 'Validation error occurred';
+};
+
+// Type guard to check if response data contains tokens
+const hasTokens = (data: unknown): data is LoginResponse => {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'access_token' in data &&
+    typeof (data as Record<string, unknown>).access_token === 'string'
+  );
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const logout = useCallback((): void => {
+  const logout = useCallback(async (): Promise<void> => {
     console.log('🚪 Logging out user...');
     
     try {
-      // Call logout endpoint to clear HTTP-only cookies
-      authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
+      // Call logout endpoint to clear server-side session
+      await authAxios.post(API_ENDPOINTS.AUTH.LOGOUT);
+      console.log('✅ Logout API call successful');
     } catch (logoutError) {
-      console.error('Logout API call failed:', logoutError);
+      console.error('❌ Logout API call failed:', logoutError);
     } finally {
-      // Clear local storage only
+      // Clear local storage
       storageUtils.clearAuthData();
       setUser(null);
       
@@ -80,16 +113,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Initialize auth state from storage and verify with server
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initializeAuth = async (): Promise<void> => {
       try {
-        // Try to get user data from server (this will use HTTP-only cookies)
-        const response = await authAxios.get('/auth/me');
+        console.log('🔍 Checking for existing session...');
+        
+        const accessToken = storageUtils.getAccessToken();
+        
+        if (!accessToken) {
+          console.log('ℹ️ No access token found in storage');
+          return;
+        }
+        
+        // Try to get user data from server using stored token
+        const response = await authAxios.get(API_ENDPOINTS.AUTH.ME);
         
         if (response.data) {
           const userData: User = response.data;
           setUser(userData);
           
-          // Store user data in localStorage for UI purposes only
+          // Update stored user data
           const userDataForStorage = {
             ...userData,
             id: userData.id.toString(),
@@ -97,10 +139,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           };
           storageUtils.setUserData(userDataForStorage);
           
-          console.log('✅ User initialized from server');
+          console.log('✅ User initialized from stored token');
         }
-      } catch {
-        console.log('❌ No valid session found');
+      } catch (error) {
+        console.log('ℹ️ No valid session found - clearing stored data', error);
         // Clear any stale local data
         storageUtils.clearAuthData();
       } finally {
@@ -108,14 +150,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
-    initializeAuth();
+    void initializeAuth();
   }, []);
 
   // Listen for logout events from axios interceptor
   useEffect(() => {
-    const handleAuthLogout = () => {
-      console.log('🚨 Received auth:logout event from axios');
-      logout();
+    const handleAuthLogout = (): void => {
+      console.log('🚨 Received auth:logout event from axios interceptor');
+      void logout();
     };
 
     if (typeof window !== 'undefined') {
@@ -143,29 +185,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ Login API response received');
 
-      // FIXED: No need to manually handle tokens - server sets HTTP-only cookies
-      // Get user data from the response or make a separate call
-      let userData: User;
-      
-      if (response.data.user) {
-        userData = response.data.user;
+      if (response.data?.access_token) {
+        // Store tokens in localStorage
+        storageUtils.setTokens(
+          response.data.access_token, 
+          response.data.refresh_token || ''
+        );
+        
+        console.log('🔄 Tokens stored, fetching user data...');
+        
+        try {
+          const userResponse = await authAxios.get(API_ENDPOINTS.AUTH.ME);
+          const userData: User = userResponse.data;
+          
+          // Store user data in localStorage
+          const userDataForStorage = {
+            ...userData,
+            id: userData.id.toString(),
+            name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
+          };
+
+          storageUtils.setUserData(userDataForStorage);
+          setUser(userData);
+          
+          console.log('✅ User data set successfully after login');
+          
+        } catch (userFetchError) {
+          console.error('❌ Could not fetch user data after login:', userFetchError);
+          
+          // Clear tokens on user fetch failure
+          storageUtils.clearAuthData();
+          
+          const axiosError = userFetchError as AxiosError;
+          if (axiosError.response?.status === 401) {
+            throw new Error('Login succeeded but token validation failed. Please try again.');
+          } else {
+            throw new Error('Login successful but could not fetch user data. Please try again.');
+          }
+        }
       } else {
-        // If user data not in login response, fetch it
-        const userResponse = await authAxios.get('/auth/me');
-        userData = userResponse.data;
+        throw new Error('Login response missing access token');
       }
-
-      // Store user data in localStorage for UI purposes only
-      const userDataForStorage = {
-        ...userData,
-        id: userData.id.toString(),
-        name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username
-      };
-
-      storageUtils.setUserData(userDataForStorage);
-      setUser(userData);
-      
-      console.log('✅ User data set successfully');
       
     } catch (error) {
       console.error('❌ Login error:', error);
@@ -178,26 +238,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (axiosError.response) {
         errorStatus = axiosError.response.status;
         
-        switch (errorStatus) {
-          case 401:
-            errorMessage = 'Invalid email or password.';
-            break;
-          case 422:
-            errorMessage = 'Please check your email and password format.';
-            break;
-          case 404:
-            errorMessage = 'Account not found. Please check your email.';
-            break;
-          case 429:
-            errorMessage = 'Too many login attempts. Please try again later.';
-            break;
-          case 500:
-          case 502:
-          case 503:
-            errorMessage = 'Server error. Please try again later.';
-            break;
-          default:
-            errorMessage = axiosError.response.data?.message || errorMessage;
+        if (axiosError.response.data?.detail) {
+          if (typeof axiosError.response.data.detail === 'string') {
+            errorMessage = axiosError.response.data.detail;
+          } else if (Array.isArray(axiosError.response.data.detail)) {
+            errorMessage = parseValidationErrors(axiosError.response.data.detail);
+          }
+        } else {
+          switch (errorStatus) {
+            case 401:
+              errorMessage = 'Invalid email or password.';
+              break;
+            case 422:
+              errorMessage = 'Please check your email and password format.';
+              break;
+            case 404:
+              errorMessage = 'Account not found. Please check your email.';
+              break;
+            case 429:
+              errorMessage = 'Too many login attempts. Please try again later.';
+              break;
+            case 500:
+            case 502:
+            case 503:
+              errorMessage = 'Server error. Please try again later.';
+              break;
+            default:
+              errorMessage = axiosError.response.data?.message || errorMessage;
+          }
         }
       } else if (axiosError.request) {
         errorMessage = 'Network error. Please check your connection.';
@@ -225,7 +293,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         password: '[HIDDEN]' 
       });
       
-      const response = await authAxios.post<RegisterResponse>(
+      // Use union type to handle both possible response types
+      const response = await authAxios.post<LoginResponse | RegisterResponse>(
         API_ENDPOINTS.AUTH.REGISTER,
         {
           email: userData.email,
@@ -238,13 +307,57 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ Registration API response received:', response.status);
 
-      // Auto-login after successful registration
-      await login({
-        email: userData.email,
-        password: userData.password
-      });
+      // Check if registration returns tokens directly using type guard
+      if (response.data && hasTokens(response.data)) {
+        // Registration returned tokens - store them and set user
+        const regResponse = response.data;
+        
+        storageUtils.setTokens(
+          regResponse.access_token, 
+          regResponse.refresh_token || ''
+        );
+        
+        try {
+          const userResponse = await authAxios.get(API_ENDPOINTS.AUTH.ME);
+          const registeredUser: User = userResponse.data;
+          
+          const userDataForStorage = {
+            ...registeredUser,
+            id: registeredUser.id.toString(),
+            name: `${registeredUser.first_name} ${registeredUser.last_name}`.trim() || registeredUser.username
+          };
 
-      console.log('✅ Auto-login after registration successful');
+          storageUtils.setUserData(userDataForStorage);
+          setUser(registeredUser);
+          
+          console.log('✅ Registration successful with direct tokens');
+        } catch (userFetchError) {
+          console.error('❌ Could not fetch user data after registration:', userFetchError);
+          storageUtils.clearAuthData();
+          throw new Error('Registration successful but could not fetch user data. Please try logging in.');
+        }
+      } else if (response.data) {
+        // Registration returned user data directly
+        const registeredUser = response.data as User;
+        
+        const userDataForStorage = {
+          ...registeredUser,
+          id: registeredUser.id.toString(),
+          name: `${registeredUser.first_name} ${registeredUser.last_name}`.trim() || registeredUser.username
+        };
+
+        storageUtils.setUserData(userDataForStorage);
+        setUser(registeredUser);
+        
+        console.log('✅ Registration successful with user data');
+      } else {
+        // Fallback: auto-login after successful registration
+        await login({
+          email: userData.email,
+          password: userData.password
+        });
+        console.log('✅ Auto-login after registration successful');
+      }
 
     } catch (error) {
       console.error('❌ Registration error:', error);
@@ -257,36 +370,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (axiosError.response) {
         errorStatus = axiosError.response.status;
         
-        switch (errorStatus) {
-          case 409:
-            errorMessage = 'An account with this email or username already exists.';
-            break;
-          case 422:
-            if (axiosError.response.data?.detail) {
-              if (Array.isArray(axiosError.response.data.detail)) {
-                errorMessage = axiosError.response.data.detail.map((err: { msg?: string; message?: string }) => 
-                  err.msg || err.message
-                ).join(', ');
-              } else {
-                errorMessage = axiosError.response.data.detail;
-              }
-            } else {
+        if (axiosError.response.data?.detail) {
+          if (typeof axiosError.response.data.detail === 'string') {
+            errorMessage = axiosError.response.data.detail;
+          } else if (Array.isArray(axiosError.response.data.detail)) {
+            errorMessage = parseValidationErrors(axiosError.response.data.detail);
+          }
+        } else {
+          switch (errorStatus) {
+            case 409:
+              errorMessage = 'An account with this email or username already exists.';
+              break;
+            case 422:
               errorMessage = 'Please check your information and try again.';
-            }
-            break;
-          case 400:
-            errorMessage = axiosError.response.data?.message || 'Invalid registration data.';
-            break;
-          case 429:
-            errorMessage = 'Too many registration attempts. Please try again later.';
-            break;
-          case 500:
-          case 502:
-          case 503:
-            errorMessage = 'Server error. Please try again later.';
-            break;
-          default:
-            errorMessage = axiosError.response.data?.message || errorMessage;
+              break;
+            case 400:
+              errorMessage = axiosError.response.data?.message || 'Invalid registration data.';
+              break;
+            case 429:
+              errorMessage = 'Too many registration attempts. Please try again later.';
+              break;
+            case 500:
+            case 502:
+            case 503:
+              errorMessage = 'Server error. Please try again later.';
+              break;
+            default:
+              errorMessage = axiosError.response.data?.message || errorMessage;
+          }
         }
       } else if (axiosError.request) {
         errorMessage = 'Network error. Please check your connection.';
@@ -305,17 +416,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [login]);
 
-  // Simplified refresh token function
+  // Manual refresh token function
   const refreshToken = useCallback(async (): Promise<void> => {
     console.log('🔄 Manual token refresh requested');
     try {
-      await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {});
-      console.log('✅ Manual token refresh successful');
+      const refreshToken = storageUtils.getRefreshToken();
+      
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await authAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
+        refresh_token: refreshToken
+      });
+
+      if (response.data?.access_token) {
+        storageUtils.setTokens(
+          response.data.access_token, 
+          response.data.refresh_token || refreshToken
+        );
+        console.log('✅ Manual token refresh successful');
+      } else {
+        throw new Error('No access token in refresh response');
+      }
     } catch (error) {
       console.error('❌ Manual token refresh failed:', error);
+      
+      const axiosError = error as AxiosError;
+      
+      // If refresh token is invalid/expired, logout user
+      if (axiosError.response?.status === 401 || 
+          (axiosError.response?.data?.detail && 
+           typeof axiosError.response.data.detail === 'string' && 
+           axiosError.response.data.detail.includes('Invalid or expired refresh token'))) {
+        console.log('🚨 Refresh token expired, logging out user');
+        await logout();
+      }
+      
       throw error;
     }
-  }, []);
+  }, [logout]);
 
   const value: AuthContextType = {
     user,
