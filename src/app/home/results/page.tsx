@@ -2,6 +2,8 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useAuth } from '@src/context/AuthProvider';
+import { redirect } from 'next/navigation';
 import { useJobMatching } from '@src/hooks/useJobMatching';
 import { JobMatch } from '@src/types/jobMatch';
 import { MatchingAnimation } from '@src/components/results/MatchingAnimation';
@@ -17,7 +19,30 @@ import { useMatchingContext } from '@src/context/MatchingContext';
 
 type ViewState = 'loading' | 'start' | 'processing' | 'results' | 'matching';
 
-export default function ResultsPage() {
+// Authentication Guard Component
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    redirect('/login'); // or wherever your login page is
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
+function ResultsPageContent() {
   const { 
     checkMatchingStatus, 
     showCompletionModal, 
@@ -250,5 +275,13 @@ export default function ResultsPage() {
         onClose={handleCompletionModalClose}
       />
     </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <AuthGuard>
+      <ResultsPageContent />
+    </AuthGuard>
   );
 }

@@ -1,10 +1,12 @@
 //src/app/home/apply/page.tsx
 'use client';
 
+import { useAuth } from '@src/context/AuthProvider';
 import { useScrapingContext } from '@src/context/ScrapingContext';
 import ScrapingStatusGuard from '@src/components/scraping/ScrapingStatusGuard';
 import { AlertCircle, ArrowRight, Bot, Search, Sparkles, Target, X, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { redirect } from 'next/navigation';
 
 interface ErrorModalProps {
   isOpen: boolean;
@@ -213,26 +215,51 @@ const ApplyPageContent = () => {
   );
 };
 
+// Authentication Guard Component
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    redirect('/login'); // or wherever your login page is
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
 export default function ApplyPage() {
   return (
-    <ScrapingStatusGuard>
-      <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-6">
-            <Target className="w-8 h-8 text-white" />
+    <AuthGuard>
+      <ScrapingStatusGuard>
+        <div className="container mx-auto px-4 py-16">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-6">
+              <Target className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Find Your Perfect Job
+            </h1>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Let our AI agents do the heavy lifting. Just tell us what you&apos;re looking for, 
+              and we&apos;ll find opportunities that match your skills perfectly.
+            </p>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Find Your Perfect Job
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Let our AI agents do the heavy lifting. Just tell us what you&apos;re looking for, 
-            and we&apos;ll find opportunities that match your skills perfectly.
-          </p>
-        </div>
 
-        <ApplyPageContent />
-      </div>
-    </ScrapingStatusGuard>
+          <ApplyPageContent />
+        </div>
+      </ScrapingStatusGuard>
+    </AuthGuard>
   );
 }
