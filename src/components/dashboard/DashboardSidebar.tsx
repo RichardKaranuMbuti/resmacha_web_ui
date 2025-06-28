@@ -58,7 +58,7 @@ export default function DashboardSidebar({
       id: 'matches', 
       label: 'My Matches', 
       icon: Star, 
-      href: '/dashboard/matches', 
+      href: '/home/results', 
       badge: '23',
       badgeColor: 'purple'
     },
@@ -71,10 +71,10 @@ export default function DashboardSidebar({
       badgeColor: 'purple'
     },
     { 
-      id: 'applications', 
-      label: 'Applications', 
+      id: 'crawlers', 
+      label: 'Deploy Crawlers', 
       icon: FileText, 
-      href: '/dashboard/applications',
+      href: '/home/apply',
       badge: '5',
       badgeColor: 'blue'
     },
