@@ -3,6 +3,7 @@
 
 import { apiAxios } from '@src/config/axiosConfig';
 import { API_BASE_URLS, API_ENDPOINTS } from '@src/constants/api';
+import { storageUtils } from '@src/utils/storage'; // Add this import
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
 
@@ -76,15 +77,82 @@ const scrapingAxios = axios.create({
   },
 });
 
-// Add request interceptor to attach auth token
+// Add request interceptor to attach auth token - FIXED VERSION
 scrapingAxios.interceptors.request.use((config) => {
-  // Get token from apiAxios instance (which has the token management)
-  const authHeader = apiAxios.defaults.headers.common['Authorization'] as string;
-  if (authHeader) {
-    config.headers.Authorization = authHeader;
+  // Get token directly from storage like the main axios config does
+  const token = storageUtils.getAccessToken();
+  
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
+  
   return config;
 });
+
+// Add the same response interceptor as your main axios instances for token refresh
+scrapingAxios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If the error is 401 and we haven't already tried to refresh
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      
+      // Skip refresh for auth endpoints to avoid infinite loops
+      if (originalRequest.url?.includes('/auth/login') || 
+          originalRequest.url?.includes('/auth/register') ||
+          originalRequest.url?.includes('/auth/refresh')) {
+        return Promise.reject(error);
+      }
+
+      originalRequest._retry = true;
+
+      try {
+        console.log('🔄 Attempting token refresh from scraping context...');
+        
+        const refreshToken = storageUtils.getRefreshToken();
+        
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+
+        // Use the main apiAxios instance for refresh to avoid circular dependencies
+        const response = await apiAxios.post(API_ENDPOINTS.AUTH.REFRESH, {
+          refresh_token: refreshToken
+        });
+
+        if (response.data?.access_token) {
+          // Store new tokens
+          storageUtils.setTokens(response.data.access_token, response.data.refresh_token || refreshToken);
+          console.log('✅ Token refresh successful from scraping context');
+          
+          // Update authorization header for the original request
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
+          }
+          
+          // Retry the original request
+          return axios(originalRequest);
+        } else {
+          throw new Error('No access token in refresh response');
+        }
+
+      } catch (refreshError) {
+        console.error('🚨 Token refresh failed in scraping context:', refreshError);
+        
+        // Clear tokens and emit logout event
+        storageUtils.clearAuthData();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:logout'));
+        }
+        
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 // Helper function to determine if status transition is valid
 const isValidStatusTransition = (currentStatus: string, newStatus: string): boolean => {

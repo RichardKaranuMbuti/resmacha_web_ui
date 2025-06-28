@@ -63,16 +63,24 @@ const emitLogoutEvent = () => {
 
 // Request interceptor to add auth tokens
 const requestInterceptor = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+  // Always get fresh token from storage for each request
   const token = storageUtils.getAccessToken();
   
-  if (token && config.headers) {
+  if (token) {
+    // Ensure headers object exists with proper typing
+    if (!config.headers) {
+      config.headers = {} as InternalAxiosRequestConfig['headers'];
+    }
     config.headers.Authorization = `Bearer ${token}`;
+    console.log('🔑 Token attached to request:', config.url);
+  } else {
+    console.warn('⚠️ No token available for request:', config.url);
   }
   
   return config;
 };
 
-// Response interceptor for token refresh
+// Response interceptor for successful responses
 const responseInterceptor = (response: AxiosResponse): AxiosResponse => {
   return response;
 };
@@ -85,6 +93,13 @@ interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {
 const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
   const originalRequest = error.config as RetryableAxiosRequestConfig;
 
+  // Log the error for debugging
+  console.error('🚨 Axios error:', {
+    status: error.response?.status,
+    url: originalRequest?.url,
+    message: error.message
+  });
+
   // If the error is 401 and we haven't already tried to refresh
   if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
     
@@ -92,14 +107,21 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
     if (originalRequest.url?.includes('/auth/login') || 
         originalRequest.url?.includes('/auth/register') ||
         originalRequest.url?.includes('/auth/refresh')) {
+      console.log('🚫 Skipping token refresh for auth endpoint');
       return Promise.reject(error);
     }
 
     // If we're already refreshing, queue this request
     if (isRefreshing) {
+      console.log('⏳ Queueing request while refresh in progress');
       return new Promise<unknown>((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then(() => {
+        // Ensure fresh token is attached after refresh
+        const freshToken = storageUtils.getAccessToken();
+        if (freshToken && originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${freshToken}`;
+        }
         return axios(originalRequest);
       }).catch(err => {
         return Promise.reject(err);
@@ -163,7 +185,32 @@ const errorInterceptor = async (error: AxiosError): Promise<AxiosResponse> => {
 };
 
 // Add interceptors to all instances that need authentication
-[authAxios, apiAxios, matchingAxios].forEach(instance => {
-  instance.interceptors.request.use(requestInterceptor);
-  instance.interceptors.response.use(responseInterceptor, errorInterceptor);
+[authAxios, apiAxios, matchingAxios].forEach((instance, index) => {
+  const instanceNames = ['authAxios', 'apiAxios', 'matchingAxios'];
+  console.log(`🔧 Setting up interceptors for ${instanceNames[index]}`);
+  
+  instance.interceptors.request.use(
+    requestInterceptor,
+    (error) => {
+      console.error(`❌ Request interceptor error for ${instanceNames[index]}:`, error);
+      return Promise.reject(error);
+    }
+  );
+  
+  instance.interceptors.response.use(
+    responseInterceptor,
+    errorInterceptor
+  );
 });
+
+// Export a utility function to manually attach token (as backup)
+export const attachTokenToRequest = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+  const token = storageUtils.getAccessToken();
+  if (token) {
+    if (!config.headers) {
+      config.headers = {} as InternalAxiosRequestConfig['headers'];
+    }
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+};

@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { API_ENDPOINTS } from '@src/constants/api';
 import { matchingAxios } from '@src/config/axiosConfig';
+import { storageUtils } from '@src/utils/storage';
 import { AxiosError } from 'axios';
 
 interface MatchingStatus {
@@ -97,48 +98,112 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
 
     try {
       console.log('🔍 Checking matching status...');
+      console.log('🔑 Making request to:', API_ENDPOINTS.MATCHING.CHECK_USER_ONGOING_MATCHING);
       
+      // Ensure we have a valid token before making the request
+      const token = storageUtils.getAccessToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      // Use the configured axios instance instead of manual token handling
       const response = await matchingAxios.get<MatchingStatus>(
         API_ENDPOINTS.MATCHING.CHECK_USER_ONGOING_MATCHING
       );
 
       const data = response.data;
       
+      // Validate response data
+      if (!data || typeof data.has_ongoing_processing !== 'boolean') {
+        console.warn('⚠️ Invalid matching status response:', data);
+        throw new Error('Invalid response from matching service');
+      }
+      
+      // Store the current state before updating
+      const currentProcessingState = data.has_ongoing_processing;
+      
       // Detect completion: was processing, now not processing, and user had initiated matching
       const wasProcessing = previousProcessingState === true;
-      const isNowNotProcessing = !data.has_ongoing_processing;
+      const isNowNotProcessing = !currentProcessingState;
       const shouldShowCompletion = wasProcessing && isNowNotProcessing && hasUserInitiatedMatching;
+
+      console.log('🔍 Completion detection:', {
+        wasProcessing,
+        isNowNotProcessing,
+        hasUserInitiatedMatching,
+        shouldShowCompletion,
+        previousProcessingState,
+        currentProcessingState
+      });
 
       if (shouldShowCompletion) {
         console.log('✅ Matching completed! Showing completion modal...');
         setShowCompletionModal(true);
         // Clear the user initiated flag since we've handled completion
         setUserInitiatedMatching(false);
+        // Stop polling since we're done
+        stopPolling();
       }
 
+      // Update the state
       setMatchingStatus(data);
-      setPreviousProcessingState(data.has_ongoing_processing);
+      setPreviousProcessingState(currentProcessingState);
 
-      // Auto-stop polling if processing is complete
-      if (!data.has_ongoing_processing && pollingInterval) {
-        console.log('⏹️ Processing completed, stopping polling...');
+      // Auto-stop polling if processing is complete and no user initiated matching
+      if (!currentProcessingState && pollingInterval && !hasUserInitiatedMatching) {
+        console.log('⏹️ Processing completed (no user initiation), stopping polling...');
         stopPolling();
       }
 
       console.log('✅ Matching status updated:', {
-        has_ongoing_processing: data.has_ongoing_processing,
-        total_ongoing_jobs: data.total_ongoing_jobs
+        has_ongoing_processing: currentProcessingState,
+        total_ongoing_jobs: data.total_ongoing_jobs,
+        user_id: data.user_id,
+        previousState: previousProcessingState
       });
 
     } catch (err: unknown) {
       const error = err as AxiosError<{ message?: string }>;
-      const errorMsg = error.response?.data?.message || error.message || 'Failed to check matching status';
-      setError(errorMsg);
-      console.error('❌ Error checking matching status:', err);
+      let errorMsg = 'Failed to check matching status';
       
-      // Stop polling on error to prevent spam
-      if (pollingInterval) {
-        console.log('⏹️ Stopping polling due to error');
+      // Safely check for response and status with proper type guards
+      const responseStatus = error.response?.status;
+      
+      console.error('❌ Matching status check failed:', {
+        status: responseStatus,
+        url: error.config?.url,
+        message: error.message,
+        response: error.response?.data
+      });
+      
+      if (responseStatus === 401) {
+        errorMsg = 'Authentication failed. Please log in again.';
+        console.error('🚨 Authentication error in matching context:', err);
+        
+        // The axios interceptor will handle this automatically
+        // but we still log it for debugging
+      } else if (responseStatus === 403) {
+        errorMsg = 'Access denied. You may not have permission to access matching services.';
+      } else if (responseStatus === 404) {
+        errorMsg = 'Matching service endpoint not found. Please check the API configuration.';
+      } else if (responseStatus && responseStatus >= 500) {
+        errorMsg = 'Server error. Please try again later.';
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
+      setError(errorMsg);
+      console.error('❌ Error checking matching status:', {
+        status: responseStatus,
+        message: errorMsg,
+        error: err
+      });
+      
+      // Stop polling on persistent errors to prevent spam
+      if (pollingInterval && (responseStatus === 401 || responseStatus === 403 || responseStatus === 404)) {
+        console.log('⏹️ Stopping polling due to persistent error');
         stopPolling();
       }
     } finally {
@@ -152,6 +217,14 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
       return; // Already polling
     }
 
+    // Ensure we have authentication before starting polling
+    const token = storageUtils.getAccessToken();
+    if (!token) {
+      console.error('❌ Cannot start polling: No authentication token');
+      setError('Authentication required. Please log in again.');
+      return;
+    }
+
     console.log('▶️ Starting matching status polling...');
     
     // Check immediately
@@ -159,6 +232,16 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
     
     // Then set up interval
     const interval = setInterval(() => {
+      // Double-check token is still valid before each poll
+      const currentToken = storageUtils.getAccessToken();
+      if (!currentToken) {
+        console.log('⏹️ No token available, stopping polling');
+        clearInterval(interval);
+        setPollingInterval(null);
+        setError('Session expired. Please log in again.');
+        return;
+      }
+      
       checkMatchingStatus();
     }, 5000); // Poll every 5 seconds
 
@@ -169,11 +252,55 @@ export const MatchingProvider: React.FC<MatchingProviderProps> = ({ children }) 
   useEffect(() => {
     return () => {
       if (pollingInterval) {
-        console.log('🧹 Cleaning up polling interval on unmount');
+        console.log('🧹 Cleaning up matching polling interval on unmount');
         clearInterval(pollingInterval);
       }
     };
   }, [pollingInterval]);
+
+  // Listen for auth logout events to clean up state
+  useEffect(() => {
+    const handleLogout = () => {
+      console.log('🚨 Auth logout detected in matching context, cleaning up...');
+      stopPolling();
+      setMatchingStatus(null);
+      setError(null);
+      setShowCompletionModal(false);
+      setHasUserInitiatedMatching(false);
+      setPreviousProcessingState(null);
+      
+      // Clear session storage
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('userInitiatedMatching');
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:logout', handleLogout);
+      
+      return () => {
+        window.removeEventListener('auth:logout', handleLogout);
+      };
+    }
+  }, [stopPolling]);
+
+  // Check token validity on mount and refresh if needed
+  useEffect(() => {
+    const initializeMatching = async () => {
+      const token = storageUtils.getAccessToken();
+      if (!token) {
+        console.log('ℹ️ No token available on matching context mount');
+        setError('Please log in to access matching services');
+        return;
+      }
+      
+      console.log('🏁 MatchingProvider initializing with valid token...');
+      // Optionally check status on mount
+      // checkMatchingStatus();
+    };
+
+    initializeMatching();
+  }, []);
 
   // Determine if user can start matching
   const canStartMatching = !matchingStatus?.has_ongoing_processing && 

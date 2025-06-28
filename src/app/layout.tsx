@@ -1,11 +1,9 @@
-// app/layout.tsx
-
+// app/layout.tsx (Server Component - keeps metadata)
 import { AuthProvider } from '@src/context/AuthProvider';
-import { ScrapingProvider } from '@src/context/ScrapingContext';
-import { MatchingProvider } from '@src/context/MatchingContext';
 import "@src/styles/globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import ClientProviders from '@src/app/ClientProviders';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,11 +58,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          <ScrapingProvider>
-            <MatchingProvider>
-              {children}
-            </MatchingProvider>
-          </ScrapingProvider>
+          <ClientProviders>
+            {children}
+          </ClientProviders>
         </AuthProvider>
       </body>
     </html>
